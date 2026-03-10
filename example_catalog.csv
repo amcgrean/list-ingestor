@@ -1,0 +1,42 @@
+item_code,description,keywords,category,unit_of_measure
+POST-4X4-PT,4x4 Pressure Treated Post 8ft,post pt 4x4 8 pressure treated,Lumber,EA
+POST-4X4-PT-10,4x4 Pressure Treated Post 10ft,post pt 4x4 10 pressure treated,Lumber,EA
+POST-6X6-PT,6x6 Pressure Treated Post 10ft,post pt 6x6 10 pressure treated,Lumber,EA
+POST-6X6-PT-12,6x6 Pressure Treated Post 12ft,post pt 6x6 12 pressure treated,Lumber,EA
+JOIST-2X8-SPF,2x8 SPF Joist 16ft,joist 2x8 spf 16 spruce pine fir,Lumber,EA
+JOIST-2X10-SPF,2x10 SPF Joist 16ft,joist 2x10 spf 16 spruce pine fir,Lumber,EA
+JOIST-2X10-SPF-20,2x10 SPF Joist 20ft,joist 2x10 spf 20 spruce pine fir,Lumber,EA
+JOIST-2X12-SPF,2x12 SPF Joist 16ft,joist 2x12 spf 16 spruce pine fir,Lumber,EA
+BEAM-4X8-PT,4x8 Pressure Treated Beam 16ft,beam 4x8 pt pressure treated 16,Lumber,EA
+BEAM-6X8-PT,6x8 Pressure Treated Beam 16ft,beam 6x8 pt pressure treated 16,Lumber,EA
+BOARD-1X6-SPF,1x6 SPF Board 16ft,board 1x6 spf 16,Lumber,EA
+BOARD-1X4-SPF,1x4 SPF Board 8ft,board 1x4 spf 8,Lumber,EA
+DECK-2X6-PT,2x6 Pressure Treated Decking 16ft,decking 2x6 pt pressure treated 16,Decking,LF
+TREX-12-GRAVEL,Trex Select Decking 12ft Gravel Path,trex composite decking 12 gravel path,Decking,LF
+TREX-16-SAND,Trex Select Decking 16ft Sandy Tan,trex composite decking 16 sand sandy tan,Decking,LF
+TREX-16-CLAM,Trex Select Decking 16ft Clam Shell,trex composite decking 16 clam shell,Decking,LF
+TREX-20-PEBB,Trex Select Decking 20ft Pebble Grey,trex composite decking 20 pebble grey gray,Decking,LF
+HANGER-LUS26,LUS26 Joist Hanger,hanger lus26 joist 2x6,Hardware,BX
+HANGER-LUS28,LUS28 Joist Hanger,hanger lus28 joist 2x8,Hardware,BX
+HANGER-LUS210,LUS210 Joist Hanger,hanger lus210 joist 2x10,Hardware,BX
+HANGER-LUS212,LUS212 Joist Hanger,hanger lus212 joist 2x12,Hardware,BX
+HANGER-LSSU210,LSSU210 Skewable Joist Hanger,hanger lssu210 skewable joist 2x10,Hardware,BX
+HANGER-HU46,HU46 Heavy Hanger,hanger hu46 heavy 4x6,Hardware,BX
+CLIP-DECK-TREX,Trex Hideaway Universal Deck Clip,deck clip trex hideaway universal composite,Hardware,BX
+SCREW-DECK-3,3in Deck Screws 1lb Box,screw deck 3 inch 1 lb,Hardware,BX
+SCREW-DECK-2.5B,2.5in Bronze Deck Screws 1lb Box,screw deck 2.5 inch 2 1/2 bronze stainless,Hardware,BX
+SCREW-DECK-2.5S,2.5in Stainless Deck Screws 1lb Box,screw deck 2.5 inch 2 1/2 stainless ss,Hardware,BX
+BOLT-LAG-3X38,3/8 x 3in Lag Bolt,lag bolt 3/8 3 inch hex,Hardware,EA
+BOLT-LAG-5X38,3/8 x 5in Lag Bolt,lag bolt 3/8 5 inch hex,Hardware,EA
+LEDGER-BOARD,Ledger Board Tape 4in x 75ft,ledger board tape flashing 4 inch 75 ft,Flashing,RL
+FLASHING-STEP,Step Flashing 5x7 25pk,step flashing 5x7 aluminum 25 pack,Flashing,PK
+JOIST-TAPE,Joist Tape 3.75in x 50ft,joist tape 3.75 inch 50 ft moisture barrier,Waterproofing,RL
+CONCBLOCK-8,8in Concrete Block,concrete block 8 inch cmu,Masonry,EA
+POSTBASE-AB66,AB66 6x6 Post Base Galvanized,post base ab66 6x6 galvanized hardware,Hardware,EA
+POSTBASE-AB44,AB44 4x4 Post Base Galvanized,post base ab44 4x4 galvanized hardware,Hardware,EA
+POSTCAP-BC6,BC6 6x6 Post Cap,post cap bc6 6x6 beam cap,Hardware,EA
+BEAMHANGER-BH46,BH46 Beam Hanger,beam hanger bh46 4x6,Hardware,EA
+RAIL-POST-4X4,4x4 Railing Post Pressure Treated,rail post 4x4 pt pressure treated railing,Lumber,EA
+RAIL-2X4-PT,2x4 Pressure Treated Rail 8ft,rail 2x4 pt pressure treated 8,Lumber,EA
+BALUSTER-WOOD,Wood Deck Baluster 32in,baluster spindle wood 32 inch deck railing,Lumber,EA
+BALUSTER-ALUM,Aluminum Baluster 32in Black,baluster spindle aluminum 32 inch black metal,Hardware,EA

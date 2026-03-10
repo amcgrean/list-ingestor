@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}ERP Catalog{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>ERP Item Catalog</h1>
+  <p class="subtitle">{{ item_count }} items loaded. Upload a CSV to add or update catalog items.</p>
+</div>
+
+<!-- Upload card -->
+<div class="card">
+  <h2 class="section-title">Upload Catalog CSV</h2>
+  <p class="help-text">
+    Required columns: <code>item_code</code>, <code>description</code><br />
+    Optional columns: <code>keywords</code>, <code>category</code>, <code>unit_of_measure</code>
+  </p>
+  <form action="{{ url_for('main.catalog_upload') }}" method="post" enctype="multipart/form-data">
+    <div class="inline-form">
+      <input type="file" name="file" accept=".csv" required class="file-input-inline" />
+      <label class="checkbox-label">
+        <input type="checkbox" name="replace_all" value="1" />
+        Replace entire catalog
+      </label>
+      <button type="submit" class="btn btn-primary">Upload &amp; Index</button>
+    </div>
+  </form>
+
+  {% if item_count > 0 %}
+  <div class="danger-zone">
+    <form action="{{ url_for('main.catalog_delete') }}" method="post"
+          onsubmit="return confirm('Delete all {{ item_count }} catalog items? This cannot be undone.')">
+      <button type="submit" class="btn btn-danger btn-sm">Clear Entire Catalog</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Item list -->
+<div class="card">
+  <div class="catalog-toolbar">
+    <form method="get" action="{{ url_for('main.catalog') }}" class="search-form">
+      <input type="text" name="q" value="{{ q }}" placeholder="Search item code or description…" class="search-input" />
+      <button type="submit" class="btn btn-sm btn-secondary">Search</button>
+      {% if q %}<a href="{{ url_for('main.catalog') }}" class="btn btn-sm btn-outline">Clear</a>{% endif %}
+    </form>
+  </div>
+
+  {% if pagination.items %}
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Item Code</th>
+        <th>Description</th>
+        <th>Category</th>
+        <th>Keywords</th>
+        <th>UOM</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in pagination.items %}
+      <tr>
+        <td><code>{{ item.item_code }}</code></td>
+        <td>{{ item.description }}</td>
+        <td>{{ item.category or '—' }}</td>
+        <td class="keywords-cell">{{ item.keywords or '—' }}</td>
+        <td>{{ item.unit_of_measure }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <!-- Pagination -->
+  <div class="pagination">
+    {% if pagination.has_prev %}
+      <a class="btn btn-sm btn-outline" href="{{ url_for('main.catalog', page=pagination.prev_num, q=q) }}">&laquo; Prev</a>
+    {% endif %}
+    <span class="page-info">Page {{ pagination.page }} of {{ pagination.pages }}</span>
+    {% if pagination.has_next %}
+      <a class="btn btn-sm btn-outline" href="{{ url_for('main.catalog', page=pagination.next_num, q=q) }}">Next &raquo;</a>
+    {% endif %}
+  </div>
+
+  {% else %}
+  <div class="empty-state">
+    {% if q %}
+      No items match &ldquo;{{ q }}&rdquo;.
+    {% else %}
+      No catalog items yet. Upload a CSV above to get started.
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<!-- CSV format reference -->
+<div class="card">
+  <h2 class="section-title">Expected CSV Format</h2>
+  <pre class="code-block">item_code,description,keywords,category,unit_of_measure
+POST-6X6-PT,6x6 Pressure Treated Post,post pt 6x6,Lumber,EA
+JOIST-2X10-SPF,2x10 SPF Joist 16ft,joist 2x10 spf 16,Lumber,EA
+HANGER-LUS210,LUS210 Joist Hanger,hanger lus210 joist,Hardware,BX
+TREX-16-SAND,Trex Decking 16ft Sand,trex decking sand composite,Decking,LF</pre>
+</div>
+{% endblock %}

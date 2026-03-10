@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Upload Material List{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Convert Material List to ERP Order</h1>
+  <p class="subtitle">Upload a photo or PDF of a contractor's material list to extract and match items automatically.</p>
+</div>
+
+<div class="card upload-card">
+  <form id="upload-form" action="{{ url_for('main.upload') }}" method="post" enctype="multipart/form-data">
+    <div class="drop-zone" id="drop-zone">
+      <div class="drop-zone-icon">&#128196;</div>
+      <p class="drop-zone-label">Drag &amp; drop your file here, or <label for="file-input" class="browse-link">browse</label></p>
+      <p class="drop-zone-hint">Supported: JPG, PNG, PDF &mdash; max 32 MB</p>
+      <input id="file-input" type="file" name="file" accept=".jpg,.jpeg,.png,.pdf" hidden required />
+    </div>
+
+    <div id="file-preview" class="file-preview hidden">
+      <span class="file-icon">&#128196;</span>
+      <span id="file-name" class="file-name"></span>
+      <button type="button" id="clear-file" class="btn-icon" title="Remove file">&times;</button>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary" id="submit-btn" disabled>
+        <span class="spinner hidden" id="spinner"></span>
+        Process Material List
+      </button>
+    </div>
+  </form>
+</div>
+
+{% if sessions %}
+<div class="card">
+  <h2 class="section-title">Recent Sessions</h2>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>File</th>
+        <th>Status</th>
+        <th>Items</th>
+        <th>Date</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in sessions %}
+      <tr>
+        <td>{{ s.filename }}</td>
+        <td><span class="badge badge-{{ s.status }}">{{ s.status }}</span></td>
+        <td>{{ s.item_count }}</td>
+        <td>{{ s.created_at.strftime('%b %d, %Y %H:%M') }}</td>
+        <td>
+          {% if s.status not in ('pending', 'error') %}
+            <a class="btn btn-sm btn-secondary" href="{{ url_for('main.review', session_id=s.id) }}">Review</a>
+          {% endif %}
+          {% if s.error_message %}
+            <span class="error-hint" title="{{ s.error_message }}">&#9888; Error</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/upload.js') }}"></script>
+{% endblock %}

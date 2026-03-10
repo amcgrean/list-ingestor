@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}Review — Session #{{ session.id }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Review &amp; Edit Matches</h1>
+  <p class="subtitle">
+    <strong>{{ session.filename }}</strong> &mdash; {{ items|length }} item(s) extracted.
+    Items below {{ (threshold * 100)|int }}% confidence are highlighted.
+  </p>
+</div>
+
+{% if not items %}
+<div class="card">
+  <p class="empty-state">No items were extracted from this session.</p>
+</div>
+{% else %}
+
+<div class="card">
+  <!-- Toolbar -->
+  <div class="review-toolbar">
+    <div class="toolbar-left">
+      <button class="btn btn-sm btn-secondary" id="confirm-all-btn">Confirm All</button>
+      <button class="btn btn-sm btn-outline" id="skip-unmatched-btn">Skip Low Confidence</button>
+    </div>
+    <div class="toolbar-right">
+      <span id="save-status" class="save-status"></span>
+      <button class="btn btn-primary" id="save-btn">Save Changes</button>
+    </div>
+  </div>
+
+  <!-- Review table -->
+  <div class="table-wrapper">
+    <table class="data-table review-table" id="review-table">
+      <thead>
+        <tr>
+          <th style="width:60px">Skip</th>
+          <th style="width:90px">Qty</th>
+          <th>Extracted Description</th>
+          <th>Matched ERP Item</th>
+          <th style="width:130px">Item Code</th>
+          <th style="width:110px">Confidence</th>
+          <th style="width:70px">OK</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        {% set low_conf = item.confidence_score < threshold %}
+        <tr class="item-row {% if low_conf %}low-confidence{% endif %} {% if item.is_skipped %}row-skipped{% endif %}"
+            data-id="{{ item.id }}"
+            data-confirmed="{{ 'true' if item.is_confirmed else 'false' }}"
+            data-skipped="{{ 'true' if item.is_skipped else 'false' }}">
+
+          <!-- Skip checkbox -->
+          <td class="col-skip">
+            <label class="checkbox-wrap">
+              <input type="checkbox" class="skip-cb" {% if item.is_skipped %}checked{% endif %} />
+              <span class="checkmark"></span>
+            </label>
+          </td>
+
+          <!-- Quantity -->
+          <td class="col-qty">
+            <input type="number" class="qty-input input-sm"
+                   value="{{ item.effective_quantity()|int if item.effective_quantity() == item.effective_quantity()|int else item.effective_quantity() }}"
+                   min="0" step="any" />
+          </td>
+
+          <!-- Extracted description -->
+          <td class="col-raw">
+            <span class="raw-desc">{{ item.raw_description }}</span>
+          </td>
+
+          <!-- Matched item description + autocomplete -->
+          <td class="col-desc">
+            <div class="autocomplete-wrap">
+              <input type="text" class="desc-input input-sm"
+                     value="{{ item.erp_description if item.matched_item_code else '' }}"
+                     placeholder="Search ERP catalog…"
+                     data-current-code="{{ item.effective_item_code() or '' }}" />
+              <div class="autocomplete-dropdown hidden"></div>
+            </div>
+          </td>
+
+          <!-- Item code (read-only display) -->
+          <td class="col-code">
+            <span class="item-code-display">{{ item.effective_item_code() or '—' }}</span>
+            <input type="hidden" class="item-code-hidden" value="{{ item.effective_item_code() or '' }}" />
+          </td>
+
+          <!-- Confidence -->
+          <td class="col-conf">
+            <div class="conf-bar-wrap" title="Fuzzy: {{ (item.fuzzy_score * 100)|round(1) }}% | Vector: {{ (item.vector_score * 100)|round(1) }}%">
+              <div class="conf-bar" style="width: {{ [item.confidence_score * 100, 100]|min|round }}%"></div>
+            </div>
+            <span class="conf-label {% if low_conf %}conf-low{% endif %}">
+              {{ (item.confidence_score * 100)|round(1) }}%
+            </span>
+          </td>
+
+          <!-- Confirm checkbox -->
+          <td class="col-confirm">
+            <label class="checkbox-wrap">
+              <input type="checkbox" class="confirm-cb" {% if item.is_confirmed %}checked{% endif %} />
+              <span class="checkmark"></span>
+            </label>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Export bar -->
+  <div class="export-bar">
+    <span class="export-label">Export reviewed list:</span>
+    <a class="btn btn-sm btn-secondary" href="{{ url_for('main.export', session_id=session.id, fmt='csv') }}">CSV</a>
+    <a class="btn btn-sm btn-secondary" href="{{ url_for('main.export', session_id=session.id, fmt='xlsx') }}">Excel</a>
+    <a class="btn btn-sm btn-secondary" href="{{ url_for('main.export', session_id=session.id, fmt='json') }}">JSON</a>
+  </div>
+</div>
+
+<!-- Raw OCR text toggle -->
+<div class="card">
+  <button class="btn btn-outline btn-sm" id="toggle-raw-btn">Show Raw OCR Text</button>
+  <pre id="raw-text" class="raw-text hidden">{{ session.raw_ocr_text }}</pre>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.SESSION_ID = {{ session.id }};
+  window.SAVE_URL = "{{ url_for('main.save_review', session_id=session.id) }}";
+  window.ERP_SEARCH_URL = "{{ url_for('main.api_erp_items') }}";
+</script>
+<script src="{{ url_for('static', filename='js/review.js') }}"></script>
+{% endblock %}

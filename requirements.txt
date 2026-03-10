@@ -1,0 +1,29 @@
+# Web framework
+flask==3.1.0
+flask-sqlalchemy==3.1.1
+
+# Database
+psycopg2-binary==2.9.10      # PostgreSQL (production)
+# sqlite3 ships with Python   # SQLite (local dev, no install needed)
+
+# OCR
+pytesseract==0.3.13
+pillow==11.1.0
+pdf2image==1.17.0             # requires poppler (see setup notes)
+
+# AI / LLM
+anthropic==0.49.0
+
+# Matching
+rapidfuzz==3.12.1
+sentence-transformers==3.4.1
+numpy==2.2.3
+
+# Data handling / export
+pandas==2.2.3
+openpyxl==3.1.5               # Excel export
+
+# Utilities
+python-dotenv==1.0.1
+werkzeug==3.1.3
+gunicorn==23.0.0              # production WSGI server

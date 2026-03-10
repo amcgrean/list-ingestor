@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}Material List Ingestor{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+</head>
+<body>
+  <nav class="navbar">
+    <div class="nav-inner">
+      <a class="nav-brand" href="{{ url_for('main.index') }}">
+        <span class="brand-icon">&#9660;</span> Material Ingestor
+      </a>
+      <div class="nav-links">
+        <a href="{{ url_for('main.index') }}" {% if request.endpoint == 'main.index' %}class="active"{% endif %}>Upload</a>
+        <a href="{{ url_for('main.catalog') }}" {% if request.endpoint and 'catalog' in request.endpoint %}class="active"{% endif %}>ERP Catalog</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-container">
+          {% for category, message in messages %}
+            <div class="flash flash-{{ category }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="footer">
+    <p>Material List Ingestor &mdash; ERP-ready order conversion</p>
+  </footer>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>
