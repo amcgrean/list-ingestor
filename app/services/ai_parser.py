@@ -79,12 +79,41 @@ def parse_material_list(
         ],
     )
 
-    raw_content = message.content[0].text.strip()
+    # Find the first text block — content may include thinking blocks or other types
+    text_block = next(
+        (block for block in message.content if block.type == "text"),
+        None,
+    )
+    if text_block is None:
+        logger.error(
+            "Claude response contained no text block. stop_reason=%s content=%r",
+            message.stop_reason,
+            message.content,
+        )
+        raise ValueError(
+            "Claude returned no text content "
+            f"(stop_reason={message.stop_reason!r})."
+        )
+
+    raw_content = text_block.text.strip()
     logger.debug("Claude raw response: %s", raw_content)
+
+    if not raw_content:
+        logger.error(
+            "Claude returned an empty text block. stop_reason=%s",
+            message.stop_reason,
+        )
+        raise ValueError(
+            "Claude returned an empty response "
+            f"(stop_reason={message.stop_reason!r})."
+        )
 
     # Strip accidental markdown fences if Claude adds them
     raw_content = re.sub(r"^```(?:json)?\s*", "", raw_content)
-    raw_content = re.sub(r"\s*```$", "", raw_content)
+    raw_content = re.sub(r"\s*```$", "", raw_content).strip()
+
+    if not raw_content:
+        raise ValueError("Claude response was only a markdown code fence with no content.")
 
     try:
         items = json.loads(raw_content)
