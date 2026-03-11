@@ -40,5 +40,5 @@ class Config:
 
     # Sentence-Transformers model (downloaded on first use)
     EMBEDDING_MODEL = os.environ.get(
-        "EMBEDDING_MODEL", "all-MiniLM-L6-v2"
+        "EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
     )

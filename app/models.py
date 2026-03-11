@@ -13,6 +13,11 @@ class ERPItem(db.Model):
     keywords = db.Column(db.Text, default="")
     category = db.Column(db.String(100), default="")
     unit_of_measure = db.Column(db.String(50), default="EA")
+    material_category = db.Column(db.String(100), default="")
+    size = db.Column(db.String(50), default="")
+    length = db.Column(db.String(20), default="")
+    brand = db.Column(db.String(150), default="")
+    normalized_name = db.Column(db.String(255), default="")
     # Serialized embedding vector (list of floats as JSON string)
     _embedding = db.Column("embedding", db.Text, nullable=True)
 
@@ -37,7 +42,21 @@ class ERPItem(db.Model):
             parts.append(self.keywords)
         if self.category:
             parts.append(self.category)
+        if self.material_category:
+            parts.append(self.material_category)
+        if self.size:
+            parts.append(self.size)
+        if self.length:
+            parts.append(f"{self.length}ft")
+        if self.brand:
+            parts.append(self.brand)
+        if self.normalized_name:
+            parts.append(self.normalized_name)
         return " ".join(parts)
+
+    @property
+    def sku(self):
+        return self.item_code
 
     def to_dict(self):
         return {
@@ -47,7 +66,22 @@ class ERPItem(db.Model):
             "keywords": self.keywords,
             "category": self.category,
             "unit_of_measure": self.unit_of_measure,
+            "material_category": self.material_category,
+            "size": self.size,
+            "length": self.length,
+            "brand": self.brand,
+            "normalized_name": self.normalized_name,
         }
+
+
+class ItemAlias(db.Model):
+    """User learned alias-to-SKU mapping from review overrides."""
+    __tablename__ = "item_aliases"
+
+    id = db.Column(db.Integer, primary_key=True)
+    alias = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    sku = db.Column(db.String(100), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
 
 class ProcessingSession(db.Model):
