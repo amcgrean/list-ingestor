@@ -30,13 +30,18 @@ class VectorIndex:
         self.catalog_matrix: np.ndarray | None = None
 
     def build_index(self, catalog: Iterable):
-        self.catalog_refs = list(catalog)
-        if not self.catalog_refs:
+        # Materialise once; extract only what we need so ORM objects can be GC'd
+        items = list(catalog)
+        if not items:
             self.faiss_index = None
             self.catalog_matrix = None
+            self.catalog_refs = []
             return
 
-        texts = [item.searchable_text for item in self.catalog_refs]
+        texts = [item.searchable_text for item in items]
+        # Store only SKU strings — not heavy ORM objects — so the index doesn't
+        # prevent garbage collection of the full ERPItem objects after each request.
+        self.catalog_refs = [item.sku for item in items]
         matrix = self.model.encode(texts, convert_to_numpy=True, normalize_embeddings=True)
         self.catalog_matrix = matrix.astype("float32")
 
@@ -56,12 +61,12 @@ class VectorIndex:
             for score, i in zip(scores[0], idx[0]):
                 if i < 0:
                     continue
-                hits.append(VectorHit(sku=self.catalog_refs[i].sku, score=float(max(0.0, score))))
+                hits.append(VectorHit(sku=self.catalog_refs[i], score=float(max(0.0, score))))
             return hits
 
         sims = (self.catalog_matrix @ q_vec[0]).tolist() if self.catalog_matrix is not None else []
         ordered = sorted(enumerate(sims), key=lambda x: x[1], reverse=True)[:k]
         return [
-            VectorHit(sku=self.catalog_refs[i].sku, score=float(max(0.0, score)))
+            VectorHit(sku=self.catalog_refs[i], score=float(max(0.0, score)))
             for i, score in ordered
         ]
