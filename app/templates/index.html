@@ -13,7 +13,13 @@
       <div class="drop-zone-icon">&#128196;</div>
       <p class="drop-zone-label">Drag &amp; drop your file here, or <label for="file-input" class="browse-link">browse</label></p>
       <p class="drop-zone-hint">Supported: JPG, PNG, PDF &mdash; max 32 MB</p>
-      <input id="file-input" type="file" name="file" accept=".jpg,.jpeg,.png,.pdf" hidden required />
+      <input id="file-input" type="file" name="file" accept="image/*,.pdf" class="file-input-hidden" required />
+      <input id="camera-input" type="file" accept="image/*" capture="environment" class="file-input-hidden" />
+    </div>
+
+    <div class="mobile-upload-actions">
+      <button type="button" class="btn btn-secondary" id="camera-btn">&#128247; Take Photo</button>
+      <button type="button" class="btn btn-secondary" id="gallery-btn">&#128193; Choose File</button>
     </div>
 
     <div id="file-preview" class="file-preview hidden">
