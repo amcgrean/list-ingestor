@@ -27,7 +27,7 @@ from werkzeug.utils import secure_filename
 
 from app import db
 from app.models import ERPItem, ExtractedItem, ProcessingSession
-from app.services import ocr_service, ai_parser, item_matcher
+from app.services import ocr_service, ai_parser, chatgpt_parser, item_matcher
 
 logger = logging.getLogger(__name__)
 main = Blueprint("main", __name__)
@@ -59,7 +59,16 @@ def index():
     recent_sessions = (
         ProcessingSession.query.order_by(ProcessingSession.created_at.desc()).limit(10).all()
     )
-    return render_template("index.html", sessions=recent_sessions)
+    claude_available = bool(current_app.config.get("ANTHROPIC_API_KEY"))
+    openai_available = bool(current_app.config.get("OPENAI_API_KEY"))
+    default_provider = current_app.config.get("DEFAULT_AI_PROVIDER", "claude")
+    return render_template(
+        "index.html",
+        sessions=recent_sessions,
+        claude_available=claude_available,
+        openai_available=openai_available,
+        default_provider=default_provider,
+    )
 
 
 @main.route("/upload", methods=["POST"])
@@ -122,29 +131,56 @@ def upload():
         return redirect(url_for("main.index"))
 
     # --- Step 2: AI parse ---
-    api_key = current_app.config.get("ANTHROPIC_API_KEY", "")
-    if not api_key:
-        session.status = "error"
-        session.error_message = "ANTHROPIC_API_KEY is not configured."
-        db.session.commit()
-        flash("AI parsing is not configured. Set ANTHROPIC_API_KEY.", "error")
-        return redirect(url_for("main.index"))
+    provider = request.form.get("ai_provider", "").strip().lower()
+    if provider not in ("claude", "openai"):
+        provider = current_app.config.get("DEFAULT_AI_PROVIDER", "claude")
 
-    try:
-        parsed_items = ai_parser.parse_material_list(
-            raw_text,
-            api_key=api_key,
-            model=current_app.config["CLAUDE_MODEL"],
-        )
-        session.status = "parsed"
-        db.session.commit()
-    except Exception as exc:
-        logger.exception("AI parsing failed for session %d", session.id)
-        session.status = "error"
-        session.error_message = f"AI parsing failed: {exc}"
-        db.session.commit()
-        flash(f"AI parsing failed: {exc}", "error")
-        return redirect(url_for("main.index"))
+    if provider == "openai":
+        api_key = current_app.config.get("OPENAI_API_KEY", "")
+        if not api_key:
+            session.status = "error"
+            session.error_message = "OPENAI_API_KEY is not configured."
+            db.session.commit()
+            flash("ChatGPT parsing is not configured. Set OPENAI_API_KEY.", "error")
+            return redirect(url_for("main.index"))
+        try:
+            parsed_items = chatgpt_parser.parse_material_list(
+                raw_text,
+                api_key=api_key,
+                model=current_app.config["OPENAI_MODEL"],
+            )
+            session.status = "parsed"
+            db.session.commit()
+        except Exception as exc:
+            logger.exception("ChatGPT parsing failed for session %d", session.id)
+            session.status = "error"
+            session.error_message = f"ChatGPT parsing failed: {exc}"
+            db.session.commit()
+            flash(f"ChatGPT parsing failed: {exc}", "error")
+            return redirect(url_for("main.index"))
+    else:
+        api_key = current_app.config.get("ANTHROPIC_API_KEY", "")
+        if not api_key:
+            session.status = "error"
+            session.error_message = "ANTHROPIC_API_KEY is not configured."
+            db.session.commit()
+            flash("AI parsing is not configured. Set ANTHROPIC_API_KEY.", "error")
+            return redirect(url_for("main.index"))
+        try:
+            parsed_items = ai_parser.parse_material_list(
+                raw_text,
+                api_key=api_key,
+                model=current_app.config["CLAUDE_MODEL"],
+            )
+            session.status = "parsed"
+            db.session.commit()
+        except Exception as exc:
+            logger.exception("Claude parsing failed for session %d", session.id)
+            session.status = "error"
+            session.error_message = f"AI parsing failed: {exc}"
+            db.session.commit()
+            flash(f"AI parsing failed: {exc}", "error")
+            return redirect(url_for("main.index"))
 
     if not parsed_items:
         session.status = "error"
@@ -449,4 +485,6 @@ def health():
         "db": db_ok,
         "catalog_items": catalog_count,
         "anthropic_key_set": bool(current_app.config.get("ANTHROPIC_API_KEY")),
+        "openai_key_set": bool(current_app.config.get("OPENAI_API_KEY")),
+        "default_ai_provider": current_app.config.get("DEFAULT_AI_PROVIDER", "claude"),
     }), 200 if db_ok else 503
