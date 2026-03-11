@@ -9,7 +9,7 @@ class Config:
     UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", str(BASE_DIR / "uploads"))
     MAX_CONTENT_LENGTH = 32 * 1024 * 1024  # 32 MB
 
-    ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "pdf"}
+    ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "pdf", "webp"}
 
     # Database
     DATABASE_URL = os.environ.get(
