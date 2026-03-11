@@ -1,0 +1,51 @@
+# Render Blueprint — deploys the web service + PostgreSQL database together.
+# Docs: https://render.com/docs/blueprint-spec
+#
+# To deploy:
+#   1. Fork / push this repo to GitHub
+#   2. Go to render.com → New → Blueprint
+#   3. Connect the repo — Render reads this file automatically
+#   4. Set the ANTHROPIC_API_KEY secret when prompted
+#   5. Click "Apply" — both the database and web service are created together
+
+databases:
+  - name: list-ingestor-db
+    databaseName: erp
+    user: erp
+    plan: free
+
+services:
+  - type: web
+    name: list-ingestor
+    runtime: docker                    # Uses the repo's Dockerfile
+    dockerfilePath: ./Dockerfile
+    plan: starter                      # Upgrade to standard for production
+    healthCheckPath: /health
+    autoDeploy: true                   # Re-deploy on every push to the branch
+
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: list-ingestor-db
+          property: connectionString
+
+      - key: SECRET_KEY
+        generateValue: true            # Render generates a random value
+
+      - key: ANTHROPIC_API_KEY
+        sync: false                    # Prompted at deploy time — never stored in repo
+
+      - key: CLAUDE_MODEL
+        value: claude-sonnet-4-6
+
+      - key: FUZZY_WEIGHT
+        value: "0.4"
+
+      - key: VECTOR_WEIGHT
+        value: "0.6"
+
+      - key: CONFIDENCE_THRESHOLD
+        value: "0.45"
+
+      - key: EMBEDDING_MODEL
+        value: all-MiniLM-L6-v2

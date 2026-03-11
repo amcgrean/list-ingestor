@@ -415,3 +415,33 @@ def catalog_delete():
 def session_raw(session_id):
     session = ProcessingSession.query.get_or_404(session_id)
     return Response(session.raw_ocr_text or "", mimetype="text/plain")
+
+
+# ---------------------------------------------------------------------------
+# Health check (used by Render / Fly.io / Docker)
+# ---------------------------------------------------------------------------
+
+@main.route("/health")
+def health():
+    """Lightweight liveness + readiness probe."""
+    try:
+        # Verify DB is reachable
+        db.session.execute(db.text("SELECT 1"))
+        db_ok = True
+    except Exception:
+        db_ok = False
+
+    catalog_count = 0
+    if db_ok:
+        try:
+            catalog_count = ERPItem.query.count()
+        except Exception:
+            pass
+
+    status = "ok" if db_ok else "degraded"
+    return jsonify({
+        "status": status,
+        "db": db_ok,
+        "catalog_items": catalog_count,
+        "anthropic_key_set": bool(current_app.config.get("ANTHROPIC_API_KEY")),
+    }), 200 if db_ok else 503

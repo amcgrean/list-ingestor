@@ -1,0 +1,46 @@
+# Fly.io configuration
+# Docs: https://fly.io/docs/reference/configuration/
+#
+# To deploy:
+#   1. Install flyctl: https://fly.io/docs/hands-on/install-flyctl/
+#   2. fly auth login
+#   3. fly launch --no-deploy        (reads this file, skips first deploy)
+#   4. fly secrets set ANTHROPIC_API_KEY=sk-ant-...
+#   5. fly secrets set SECRET_KEY=$(openssl rand -hex 32)
+#   6. fly postgres create --name list-ingestor-db
+#   7. fly postgres attach list-ingestor-db   (sets DATABASE_URL automatically)
+#   8. fly deploy
+
+app = "list-ingestor"
+primary_region = "ord"               # Chicago — change to your nearest region
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0           # Scale to zero when idle (cost-saving)
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 25
+    soft_limit = 20
+
+[[vm]]
+  memory = "1gb"
+  cpu_kind = "shared"
+  cpus = 1
+
+[checks]
+  [checks.health]
+    grace_period = "30s"
+    interval = "15s"
+    method = "GET"
+    path = "/health"
+    port = 8000
+    timeout = "10s"
+    type = "http"
