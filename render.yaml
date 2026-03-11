@@ -49,3 +49,6 @@ services:
 
       - key: EMBEDDING_MODEL
         value: all-MiniLM-L6-v2
+
+      - key: HF_HOME
+        value: /app/.cache/huggingface
