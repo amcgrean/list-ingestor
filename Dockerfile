@@ -31,4 +31,4 @@ RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTr
 EXPOSE 8000
 
 # Single worker to stay within Render Starter 512 MB RAM limit
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "1", "--timeout", "120", "run:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "1", "--timeout", "300", "run:app"]

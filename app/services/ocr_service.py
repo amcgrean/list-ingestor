@@ -23,12 +23,31 @@ except ImportError:
     PDF_SUPPORT = False
     logger.warning("pdf2image not installed — PDF uploads will not be supported.")
 
+# Maximum dimension (px) before downscaling; keeps RAM under ~25 MB per image
+_MAX_IMAGE_DIM = 2000
+# PDF render DPI — 150 is plenty for printed text and uses 4× less RAM than 300
+_PDF_DPI = 150
+# Cap pages to avoid unbounded memory on large PDFs
+_MAX_PDF_PAGES = 10
+
+
+def _downscale(img: Image.Image, max_dim: int = _MAX_IMAGE_DIM) -> Image.Image:
+    """Scale down an image so its longest side is at most max_dim pixels."""
+    w, h = img.size
+    if max(w, h) <= max_dim:
+        return img
+    scale = max_dim / max(w, h)
+    return img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
+
 
 def preprocess_image(img: Image.Image) -> Image.Image:
     """
     Apply grayscale, contrast enhancement, and adaptive thresholding
     to maximise OCR accuracy on photos of printed material lists.
     """
+    # Downscale first to reduce RAM usage before expensive operations
+    img = _downscale(img)
+
     # Convert to grayscale
     img = img.convert("L")
 
@@ -56,36 +75,51 @@ def extract_text_from_image(image_path: Union[str, Path]) -> str:
             img,
             config="--psm 6 --oem 3",  # psm 6 = assume uniform block of text
         )
+        img.close()
         return text.strip()
     except Exception as exc:
         logger.exception("OCR failed for %s", image_path)
         raise RuntimeError(f"OCR failed: {exc}") from exc
 
 
-def extract_text_from_pdf(pdf_path: Union[str, Path], dpi: int = 300) -> str:
+def extract_text_from_pdf(pdf_path: Union[str, Path], dpi: int = _PDF_DPI) -> str:
     """
     Convert each PDF page to an image then OCR them, returning concatenated text.
+    Pages are processed one at a time to keep peak RAM low.
     Raises RuntimeError on failure.
     """
     if not PDF_SUPPORT:
         raise RuntimeError(
             "pdf2image is not installed. Install it and poppler to enable PDF support."
         )
+
+    # Convert pages one at a time using a generator to avoid loading all pages into RAM
+    texts = []
+    page_num = 0
     try:
-        pages = convert_from_path(str(pdf_path), dpi=dpi)
+        for page_img in convert_from_path(
+            str(pdf_path),
+            dpi=dpi,
+            fmt="jpeg",           # JPEG uses less RAM than uncompressed during decode
+            thread_count=1,       # Stay single-threaded to cap CPU/RAM on starter plan
+        ):
+            page_num += 1
+            if page_num > _MAX_PDF_PAGES:
+                logger.warning("PDF has >%d pages; truncating OCR at page %d", _MAX_PDF_PAGES, _MAX_PDF_PAGES)
+                page_img.close()
+                break
+            try:
+                processed = preprocess_image(page_img)
+                text = pytesseract.image_to_string(processed, config="--psm 6 --oem 3")
+                texts.append(text.strip())
+            except Exception as exc:
+                logger.warning("OCR failed for page %d: %s", page_num, exc)
+                texts.append(f"[OCR failed for page {page_num}]")
+            finally:
+                page_img.close()
     except Exception as exc:
         logger.exception("PDF conversion failed for %s", pdf_path)
         raise RuntimeError(f"Could not convert PDF to images: {exc}") from exc
-
-    texts = []
-    for i, page_img in enumerate(pages, start=1):
-        try:
-            page_img = preprocess_image(page_img)
-            text = pytesseract.image_to_string(page_img, config="--psm 6 --oem 3")
-            texts.append(text.strip())
-        except Exception as exc:
-            logger.warning("OCR failed for page %d: %s", i, exc)
-            texts.append(f"[OCR failed for page {i}]")
 
     return "\n\n".join(t for t in texts if t)
 
