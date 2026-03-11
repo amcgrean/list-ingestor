@@ -25,6 +25,14 @@ class Config:
     ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
     CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6")
 
+    # OpenAI / ChatGPT
+    OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+    OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
+
+    # AI provider used for parsing: "claude" or "openai"
+    # Can be overridden per-upload via the upload form.
+    DEFAULT_AI_PROVIDER = os.environ.get("DEFAULT_AI_PROVIDER", "claude")
+
     # Matching weights
     FUZZY_WEIGHT = float(os.environ.get("FUZZY_WEIGHT", "0.4"))
     VECTOR_WEIGHT = float(os.environ.get("VECTOR_WEIGHT", "0.6"))

@@ -210,6 +210,56 @@ body {
 }
 .file-name { flex: 1; font-size: .875rem; color: var(--gray-700); }
 
+/* ---- AI Provider Selector ---- */
+.provider-selector {
+  margin-top: 1.25rem;
+}
+.provider-label {
+  display: block;
+  font-size: .8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--gray-500);
+  margin-bottom: .5rem;
+}
+.provider-options {
+  display: flex;
+  gap: .75rem;
+  flex-wrap: wrap;
+}
+.provider-option {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .5rem .875rem;
+  border: 1.5px solid var(--gray-300);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: .875rem;
+  transition: border-color .15s, background .15s;
+}
+.provider-option:has(input:checked) {
+  border-color: var(--primary);
+  background: #eff6ff;
+}
+.provider-option input[type="radio"] {
+  accent-color: var(--primary);
+}
+.provider-name {
+  font-weight: 600;
+  color: var(--gray-800);
+}
+.provider-tag {
+  font-size: .75rem;
+  color: var(--gray-500);
+}
+.provider-none {
+  font-size: .875rem;
+  color: var(--gray-500);
+  font-style: italic;
+}
+
 .form-actions { margin-top: 1rem; }
 
 /* ---- Spinner ---- */
