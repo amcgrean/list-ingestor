@@ -30,7 +30,5 @@ class Config:
     VECTOR_WEIGHT = float(os.environ.get("VECTOR_WEIGHT", "0.6"))
     CONFIDENCE_THRESHOLD = float(os.environ.get("CONFIDENCE_THRESHOLD", "0.45"))
 
-    # Sentence-Transformers model (downloaded on first use)
-    EMBEDDING_MODEL = os.environ.get(
-        "EMBEDDING_MODEL", "all-MiniLM-L6-v2"
-    )
+    # Kept for API compatibility; the matcher uses TF-IDF and ignores this value.
+    EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "tfidf")

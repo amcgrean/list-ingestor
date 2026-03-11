@@ -16,7 +16,7 @@ anthropic==0.49.0
 
 # Matching
 rapidfuzz==3.12.1
-sentence-transformers==3.4.1
+scikit-learn==1.6.1
 numpy==2.2.3
 
 # Data handling / export

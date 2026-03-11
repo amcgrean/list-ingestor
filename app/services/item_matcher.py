@@ -4,11 +4,19 @@ Item Matcher Service
 Matches extracted descriptions to ERP catalog items using a hybrid approach:
 
   1. Fuzzy text matching via RapidFuzz (token_set_ratio)
-  2. Vector cosine similarity via sentence-transformers
+  2. TF-IDF cosine similarity via scikit-learn
 
-  final_score = (fuzzy_score * FUZZY_WEIGHT) + (vector_score * VECTOR_WEIGHT)
+  final_score = (fuzzy_score * FUZZY_WEIGHT) + (tfidf_score * VECTOR_WEIGHT)
 
 Also normalises common lumber/construction formats before matching.
+
+Memory note
+-----------
+The previous implementation used sentence-transformers (PyTorch) which
+required ~300 MB RAM, exceeding the 512 MB limit on Render's starter plan.
+scikit-learn TF-IDF achieves comparable accuracy for short item descriptions
+at a fraction of the cost (~5 MB).  The vectorizer is kept in a module-level
+cache so it is fitted once per catalog and reused across requests.
 """
 
 import logging
@@ -17,20 +25,45 @@ from typing import Optional
 
 import numpy as np
 from rapidfuzz import fuzz
-from sentence_transformers import SentenceTransformer
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity as sk_cosine
 
 logger = logging.getLogger(__name__)
 
-# Lazy-loaded singleton so the model is downloaded only once
-_model: Optional[SentenceTransformer] = None
+# ---------------------------------------------------------------------------
+# In-memory TF-IDF state
+# Rebuilt on catalog upload; lazily rebuilt after a server restart.
+# ---------------------------------------------------------------------------
+
+_vectorizer: Optional[TfidfVectorizer] = None
+_catalog_matrix = None          # scipy sparse (n_items, vocab)
+_catalog_item_ids: list = []    # ERPItem.id values aligned with matrix rows
 
 
-def _get_model(model_name: str) -> SentenceTransformer:
-    global _model
-    if _model is None:
-        logger.info("Loading sentence-transformers model: %s", model_name)
-        _model = SentenceTransformer(model_name)
-    return _model
+def _build_vectorizer(erp_items: list) -> None:
+    """Fit TF-IDF on the current catalog and cache the result globally."""
+    global _vectorizer, _catalog_matrix, _catalog_item_ids
+    texts = [normalise_description(item.searchable_text) for item in erp_items]
+    vec = TfidfVectorizer(
+        analyzer="word",
+        ngram_range=(1, 2),
+        min_df=1,
+        sublinear_tf=True,
+    )
+    _catalog_matrix = vec.fit_transform(texts)
+    _vectorizer = vec
+    _catalog_item_ids = [item.id for item in erp_items]
+    logger.info("Built TF-IDF vectorizer for %d catalog items.", len(erp_items))
+
+
+def _ensure_vectorizer(erp_items: list) -> bool:
+    """Return True (and rebuild if needed) when the vectorizer is ready."""
+    current_ids = [item.id for item in erp_items]
+    if _vectorizer is None or _catalog_item_ids != current_ids:
+        if not erp_items:
+            return False
+        _build_vectorizer(erp_items)
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -59,7 +92,7 @@ _UNIT_NORMALISATION = {
 
 def normalise_description(text: str) -> str:
     """
-    Convert common construction shorthand to expanded form so fuzzy / vector
+    Convert common construction shorthand to expanded form so fuzzy / TF-IDF
     matching has more surface area to work with.
 
     Examples:
@@ -93,38 +126,18 @@ def normalise_description(text: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Embedding helpers
+# Catalog pre-computation (called after catalog upload)
 # ---------------------------------------------------------------------------
 
-def _embed(texts: list[str], model_name: str) -> np.ndarray:
-    model = _get_model(model_name)
-    return model.encode(texts, convert_to_numpy=True, normalize_embeddings=True)
-
-
-def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
-    """Cosine similarity between two normalised vectors (dot product)."""
-    return float(np.dot(a, b))
-
-
-# ---------------------------------------------------------------------------
-# Catalog embedding pre-computation
-# ---------------------------------------------------------------------------
-
-def compute_catalog_embeddings(erp_items: list, model_name: str) -> None:
+def compute_catalog_embeddings(erp_items: list, model_name: str = "") -> None:
     """
-    Compute and store embeddings for all ERPItem objects in place.
-    Call this after loading a new catalog or on first run.
+    Build and cache the TF-IDF vectorizer for the current catalog.
+
+    The ``model_name`` parameter is accepted for API compatibility but ignored;
+    the vectorizer is always TF-IDF.
     """
-    if not erp_items:
-        return
-
-    texts = [normalise_description(item.searchable_text) for item in erp_items]
-    embeddings = _embed(texts, model_name)
-
-    for item, emb in zip(erp_items, embeddings):
-        item.embedding = emb.tolist()
-
-    logger.info("Computed embeddings for %d ERP items.", len(erp_items))
+    if erp_items:
+        _build_vectorizer(erp_items)
 
 
 # ---------------------------------------------------------------------------
@@ -137,7 +150,7 @@ MatchResult = dict  # typed for readability
 def match_item(
     description: str,
     erp_items: list,
-    model_name: str,
+    model_name: str = "",
     fuzzy_weight: float = 0.4,
     vector_weight: float = 0.6,
 ) -> MatchResult:
@@ -157,30 +170,14 @@ def match_item(
     norm_desc = normalise_description(description)
 
     # --- Fuzzy scoring ---
-    fuzzy_scores = []
-    for item in erp_items:
-        norm_catalog = normalise_description(item.searchable_text)
-        score = fuzz.token_set_ratio(norm_desc, norm_catalog) / 100.0
-        fuzzy_scores.append(score)
+    fuzzy_scores = [
+        fuzz.token_set_ratio(norm_desc, normalise_description(item.searchable_text)) / 100.0
+        for item in erp_items
+    ]
 
-    # --- Vector scoring ---
-    query_emb = _embed([norm_desc], model_name)[0]
+    # --- TF-IDF vector scoring ---
+    vector_scores = _tfidf_scores(norm_desc, erp_items)
 
-    vector_scores = []
-    for item in erp_items:
-        if item.embedding is not None:
-            item_emb = np.array(item.embedding, dtype=np.float32)
-            # Normalise in case it wasn't stored normalised
-            norm = np.linalg.norm(item_emb)
-            if norm > 0:
-                item_emb = item_emb / norm
-            sim = cosine_similarity(query_emb, item_emb)
-            # Clamp to [0, 1] — cosine can be slightly negative for dissimilar texts
-            vector_scores.append(max(0.0, sim))
-        else:
-            vector_scores.append(0.0)
-
-    # --- Combined score ---
     combined = [
         (f * fuzzy_weight) + (v * vector_weight)
         for f, v in zip(fuzzy_scores, vector_scores)
@@ -201,42 +198,36 @@ def match_item(
 def match_items_batch(
     descriptions: list[str],
     erp_items: list,
-    model_name: str,
+    model_name: str = "",
     fuzzy_weight: float = 0.4,
     vector_weight: float = 0.6,
 ) -> list[MatchResult]:
-    """Batch version — pre-embeds all queries in one shot for efficiency."""
+    """Batch version — vectorises all queries in one shot for efficiency."""
     if not erp_items:
         return [_no_match() for _ in descriptions]
 
     norm_descs = [normalise_description(d) for d in descriptions]
 
-    # Embed all queries at once
-    query_embs = _embed(norm_descs, model_name)
-
-    # Build catalog embedding matrix
-    catalog_embs = []
-    for item in erp_items:
-        if item.embedding is not None:
-            emb = np.array(item.embedding, dtype=np.float32)
-            norm = np.linalg.norm(emb)
-            catalog_embs.append(emb / norm if norm > 0 else emb)
-        else:
-            catalog_embs.append(np.zeros(query_embs.shape[1], dtype=np.float32))
-
-    catalog_matrix = np.stack(catalog_embs)  # (n_items, dim)
+    # TF-IDF scores for all queries at once
+    if _ensure_vectorizer(erp_items):
+        query_matrix = _vectorizer.transform(norm_descs)
+        # (n_queries, n_items)
+        sim_matrix = sk_cosine(query_matrix, _catalog_matrix)
+        all_vector_scores = np.clip(sim_matrix, 0, 1).tolist()
+    else:
+        all_vector_scores = [[0.0] * len(erp_items)] * len(norm_descs)
 
     results = []
-    for i, (norm_desc, q_emb) in enumerate(zip(norm_descs, query_embs)):
+    for i, norm_desc in enumerate(norm_descs):
         fuzzy_scores = [
             fuzz.token_set_ratio(norm_desc, normalise_description(item.searchable_text)) / 100.0
             for item in erp_items
         ]
-        vector_sims = np.clip(catalog_matrix @ q_emb, 0, 1).tolist()
+        vector_scores = all_vector_scores[i]
 
         combined = [
             (f * fuzzy_weight) + (v * vector_weight)
-            for f, v in zip(fuzzy_scores, vector_sims)
+            for f, v in zip(fuzzy_scores, vector_scores)
         ]
 
         best_idx = int(np.argmax(combined))
@@ -247,10 +238,19 @@ def match_items_batch(
             "matched_description": best_item.description,
             "confidence_score": round(combined[best_idx], 4),
             "fuzzy_score": round(fuzzy_scores[best_idx], 4),
-            "vector_score": round(vector_sims[best_idx], 4),
+            "vector_score": round(vector_scores[best_idx], 4),
         })
 
     return results
+
+
+def _tfidf_scores(norm_query: str, erp_items: list) -> list[float]:
+    """Return per-item TF-IDF cosine similarity scores for a single query."""
+    if not _ensure_vectorizer(erp_items):
+        return [0.0] * len(erp_items)
+    q_vec = _vectorizer.transform([norm_query])
+    sims = sk_cosine(q_vec, _catalog_matrix)[0]
+    return np.clip(sims, 0, 1).tolist()
 
 
 def _no_match() -> MatchResult:
