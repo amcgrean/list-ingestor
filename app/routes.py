@@ -78,7 +78,12 @@ def upload():
         return redirect(url_for("main.index"))
 
     # Save uploaded file
-    file_path = save_upload(file)
+    try:
+        file_path = save_upload(file)
+    except Exception as exc:
+        logger.exception("Failed to save uploaded file")
+        flash(f"Could not save the uploaded file: {exc}", "error")
+        return redirect(url_for("main.index"))
     ext = file_path.suffix.lstrip(".").lower()
 
     session = ProcessingSession(
