@@ -32,5 +32,9 @@ USER appuser
 
 EXPOSE 8000
 
-# Use gunicorn in production; 2 workers is plenty for a single-tenant tool
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "2", "--timeout", "120", "run:app"]
+# Use gunicorn in production.
+# WEB_CONCURRENCY is set to 1 by Render on the free/starter plan (512 MB RAM).
+# sentence-transformers + PyTorch require ~300 MB, so a single worker is required
+# to stay within the memory limit.  Override WEB_CONCURRENCY in the Render
+# dashboard if you upgrade to an instance with more RAM.
+CMD ["sh", "-c", "exec gunicorn --bind 0.0.0.0:8000 --workers ${WEB_CONCURRENCY:-1} --timeout 120 run:app"]
