@@ -32,5 +32,5 @@ USER appuser
 
 EXPOSE 8000
 
-# Use gunicorn in production; 2 workers is plenty for a single-tenant tool
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "2", "--timeout", "120", "run:app"]
+# Single worker to stay within Render Starter 512 MB RAM limit
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "1", "--timeout", "120", "run:app"]
