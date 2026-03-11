@@ -236,13 +236,14 @@ def review(session_id):
     session = ProcessingSession.query.get_or_404(session_id)
     items = ExtractedItem.query.filter_by(session_id=session_id).all()
     threshold = current_app.config["CONFIDENCE_THRESHOLD"]
-    erp_items = ERPItem.query.order_by(ERPItem.description).all()
+    # erp_items is intentionally NOT loaded here — the review template uses
+    # the /api/erp-items JS autocomplete endpoint, so loading the entire
+    # catalog into memory for every review page visit was wasted RAM.
     return render_template(
         "review.html",
         session=session,
         items=items,
         threshold=threshold,
-        erp_items=erp_items,
     )
 
 
