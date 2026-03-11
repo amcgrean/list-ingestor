@@ -168,6 +168,37 @@ body {
 .browse-link { color: var(--primary); cursor: pointer; text-decoration: underline; font-weight: 500; }
 .drop-zone-hint { font-size: .8rem; color: var(--gray-500); }
 
+/* Visually-hidden file inputs (accessible to JS .click(), unlike display:none) */
+.file-input-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* Mobile upload action buttons — hidden on desktop, shown on touch devices */
+.mobile-upload-actions {
+  display: none;
+  gap: .75rem;
+  margin-top: 1rem;
+  justify-content: center;
+}
+.mobile-upload-actions .btn {
+  flex: 1;
+  max-width: 160px;
+  justify-content: center;
+}
+
+@media (max-width: 640px) {
+  .mobile-upload-actions { display: flex; }
+  .drop-zone { padding: 1.5rem 1rem; }
+  .drop-zone-label .browse-link { display: none; } /* hide desktop "browse" text on mobile */
+  .upload-card { max-width: 100%; }
+  .main-content { margin: 1rem auto; }
+}
+
 .file-preview {
   display: flex;
   align-items: center;
