@@ -8,6 +8,7 @@ import io
 import json
 import logging
 import os
+import time
 import uuid
 from pathlib import Path
 
@@ -26,8 +27,9 @@ from flask import (
 from werkzeug.utils import secure_filename
 
 from app import db
-from app.models import ERPItem, ExtractedItem, ProcessingSession, ItemAlias, MatchFeedbackEvent
+from app.models import ERPItem, ExtractedItem, IngesterMetrics, ProcessingSession, ItemAlias, MatchFeedbackEvent
 from app.services import ocr_service, ai_parser, chatgpt_parser, item_matcher
+from app.services import metrics_service
 
 logger = logging.getLogger(__name__)
 main = Blueprint("main", __name__)
@@ -103,21 +105,41 @@ def upload():
     db.session.add(session)
     db.session.commit()
 
+    t_start = time.perf_counter()
+    ocr_ms = ai_ms = match_ms = None
+    ocr_error = ai_parse_error = match_error = False
+
     # --- Step 1: OCR ---
+    t0 = time.perf_counter()
     try:
         raw_text = ocr_service.extract_text(file_path)
+        ocr_ms = int((time.perf_counter() - t0) * 1000)
         session.raw_ocr_text = raw_text
         session.status = "ocr_complete"
         db.session.commit()
+        logger.info("ocr_complete", extra={
+            "session_id": session.id, "stage": "ocr", "duration_ms": ocr_ms,
+        })
     except Exception as exc:
-        logger.exception("OCR failed for session %d", session.id)
+        ocr_ms = int((time.perf_counter() - t0) * 1000)
+        ocr_error = True
+        logger.exception("OCR failed for session %d", session.id, extra={
+            "session_id": session.id, "stage": "ocr", "duration_ms": ocr_ms,
+        })
         session.status = "error"
         session.error_message = f"OCR failed: {exc}"
         db.session.commit()
+        metrics_service.save_session_metrics(
+            session_id=session.id, ai_provider="n/a",
+            ocr_ms=ocr_ms, ai_parse_ms=None, match_ms=None,
+            total_ms=int((time.perf_counter() - t_start) * 1000),
+            items_extracted=0, items_matched=0, items_below_threshold=0,
+            avg_confidence=None, avg_fuzzy_score=None, avg_vector_score=None,
+            ocr_error=True,
+        )
         flash(f"Could not read the file: {exc}", "error")
         return redirect(url_for("main.index"))
     finally:
-        # Clean up uploaded file after reading
         try:
             os.unlink(file_path)
         except OSError:
@@ -127,6 +149,14 @@ def upload():
         session.status = "error"
         session.error_message = "OCR produced no text. The image may be unreadable."
         db.session.commit()
+        metrics_service.save_session_metrics(
+            session_id=session.id, ai_provider="n/a",
+            ocr_ms=ocr_ms, ai_parse_ms=None, match_ms=None,
+            total_ms=int((time.perf_counter() - t_start) * 1000),
+            items_extracted=0, items_matched=0, items_below_threshold=0,
+            avg_confidence=None, avg_fuzzy_score=None, avg_vector_score=None,
+            ocr_error=True,
+        )
         flash("The file appears blank or unreadable. Try a clearer image.", "error")
         return redirect(url_for("main.index"))
 
@@ -135,6 +165,7 @@ def upload():
     if provider not in ("claude", "openai"):
         provider = current_app.config.get("DEFAULT_AI_PROVIDER", "claude")
 
+    t0 = time.perf_counter()
     if provider == "openai":
         api_key = current_app.config.get("OPENAI_API_KEY", "")
         if not api_key:
@@ -149,13 +180,31 @@ def upload():
                 api_key=api_key,
                 model=current_app.config["OPENAI_MODEL"],
             )
+            ai_ms = int((time.perf_counter() - t0) * 1000)
             session.status = "parsed"
             db.session.commit()
+            logger.info("ai_parse_complete", extra={
+                "session_id": session.id, "stage": "ai_parse",
+                "duration_ms": ai_ms, "ai_provider": provider,
+                "items": len(parsed_items),
+            })
         except Exception as exc:
-            logger.exception("ChatGPT parsing failed for session %d", session.id)
+            ai_ms = int((time.perf_counter() - t0) * 1000)
+            ai_parse_error = True
+            logger.exception("ChatGPT parsing failed for session %d", session.id, extra={
+                "session_id": session.id, "stage": "ai_parse", "duration_ms": ai_ms,
+            })
             session.status = "error"
             session.error_message = f"ChatGPT parsing failed: {exc}"
             db.session.commit()
+            metrics_service.save_session_metrics(
+                session_id=session.id, ai_provider=provider,
+                ocr_ms=ocr_ms, ai_parse_ms=ai_ms, match_ms=None,
+                total_ms=int((time.perf_counter() - t_start) * 1000),
+                items_extracted=0, items_matched=0, items_below_threshold=0,
+                avg_confidence=None, avg_fuzzy_score=None, avg_vector_score=None,
+                ai_parse_error=True,
+            )
             flash(f"ChatGPT parsing failed: {exc}", "error")
             return redirect(url_for("main.index"))
     else:
@@ -172,13 +221,31 @@ def upload():
                 api_key=api_key,
                 model=current_app.config["CLAUDE_MODEL"],
             )
+            ai_ms = int((time.perf_counter() - t0) * 1000)
             session.status = "parsed"
             db.session.commit()
+            logger.info("ai_parse_complete", extra={
+                "session_id": session.id, "stage": "ai_parse",
+                "duration_ms": ai_ms, "ai_provider": provider,
+                "items": len(parsed_items),
+            })
         except Exception as exc:
-            logger.exception("Claude parsing failed for session %d", session.id)
+            ai_ms = int((time.perf_counter() - t0) * 1000)
+            ai_parse_error = True
+            logger.exception("Claude parsing failed for session %d", session.id, extra={
+                "session_id": session.id, "stage": "ai_parse", "duration_ms": ai_ms,
+            })
             session.status = "error"
             session.error_message = f"AI parsing failed: {exc}"
             db.session.commit()
+            metrics_service.save_session_metrics(
+                session_id=session.id, ai_provider=provider,
+                ocr_ms=ocr_ms, ai_parse_ms=ai_ms, match_ms=None,
+                total_ms=int((time.perf_counter() - t_start) * 1000),
+                items_extracted=0, items_matched=0, items_below_threshold=0,
+                avg_confidence=None, avg_fuzzy_score=None, avg_vector_score=None,
+                ai_parse_error=True,
+            )
             flash(f"AI parsing failed: {exc}", "error")
             return redirect(url_for("main.index"))
 
@@ -186,13 +253,23 @@ def upload():
         session.status = "error"
         session.error_message = "AI returned no items from the material list."
         db.session.commit()
+        metrics_service.save_session_metrics(
+            session_id=session.id, ai_provider=provider,
+            ocr_ms=ocr_ms, ai_parse_ms=ai_ms, match_ms=None,
+            total_ms=int((time.perf_counter() - t_start) * 1000),
+            items_extracted=0, items_matched=0, items_below_threshold=0,
+            avg_confidence=None, avg_fuzzy_score=None, avg_vector_score=None,
+            ai_parse_error=True,
+        )
         flash("No items could be extracted from the material list.", "warning")
         return redirect(url_for("main.index"))
 
     # --- Step 3: Item matching ---
     erp_items = ERPItem.query.all()
     descriptions = [item["description"] for item in parsed_items]
+    threshold = current_app.config["CONFIDENCE_THRESHOLD"]
 
+    t0 = time.perf_counter()
     if erp_items:
         try:
             match_results = item_matcher.match_items_batch(
@@ -203,10 +280,29 @@ def upload():
                 vector_weight=current_app.config["VECTOR_WEIGHT"],
             )
         except Exception as exc:
-            logger.exception("Item matching failed for session %d", session.id)
+            logger.exception("Item matching failed for session %d", session.id, extra={
+                "session_id": session.id, "stage": "match",
+            })
+            match_error = True
             match_results = [item_matcher._no_match() for _ in parsed_items]
     else:
         match_results = [item_matcher._no_match() for _ in parsed_items]
+    match_ms = int((time.perf_counter() - t0) * 1000)
+    total_ms = int((time.perf_counter() - t_start) * 1000)
+
+    logger.info("match_complete", extra={
+        "session_id": session.id, "stage": "match",
+        "duration_ms": match_ms, "items": len(match_results),
+    })
+
+    confidence_scores = [r["confidence_score"] for r in match_results]
+    fuzzy_scores = [r["fuzzy_score"] for r in match_results]
+    vector_scores = [r["vector_score"] for r in match_results]
+    items_matched = sum(1 for r in match_results if r["matched_item_code"])
+    items_below = sum(1 for r in match_results if r["confidence_score"] < threshold)
+    avg_conf = sum(confidence_scores) / len(confidence_scores) if confidence_scores else None
+    avg_fuzzy = sum(fuzzy_scores) / len(fuzzy_scores) if fuzzy_scores else None
+    avg_vec = sum(vector_scores) / len(vector_scores) if vector_scores else None
 
     for parsed, match in zip(parsed_items, match_results):
         extracted = ExtractedItem(
@@ -223,6 +319,29 @@ def upload():
 
     session.status = "matched"
     db.session.commit()
+
+    # Persist pipeline metrics
+    metrics_service.save_session_metrics(
+        session_id=session.id,
+        ai_provider=provider,
+        ocr_ms=ocr_ms,
+        ai_parse_ms=ai_ms,
+        match_ms=match_ms,
+        total_ms=total_ms,
+        items_extracted=len(parsed_items),
+        items_matched=items_matched,
+        items_below_threshold=items_below,
+        avg_confidence=avg_conf,
+        avg_fuzzy_score=avg_fuzzy,
+        avg_vector_score=avg_vec,
+        match_error=match_error,
+    )
+
+    logger.info("upload_complete", extra={
+        "session_id": session.id, "stage": "upload",
+        "duration_ms": total_ms, "ai_provider": provider,
+        "items": len(parsed_items),
+    })
 
     return redirect(url_for("main.review", session_id=session.id))
 
@@ -521,6 +640,55 @@ def session_raw(session_id):
 # ---------------------------------------------------------------------------
 # Health check (used by Render / Fly.io / Docker)
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Metrics dashboard + API
+# ---------------------------------------------------------------------------
+
+@main.route("/metrics")
+def metrics_dashboard():
+    """Human-readable metrics dashboard."""
+    days = request.args.get("days", 30, type=int)
+    summary = metrics_service.get_summary(days=days)
+    recent = metrics_service.get_recent_sessions(limit=25)
+    conf_dist = metrics_service.get_confidence_distribution(days=days)
+    provider_stats = metrics_service.get_provider_stats(days=days)
+    return render_template(
+        "metrics.html",
+        summary=summary,
+        recent_sessions=recent,
+        conf_dist=conf_dist,
+        provider_stats=provider_stats,
+        days=days,
+    )
+
+
+@main.route("/api/metrics")
+def api_metrics():
+    """Machine-readable metrics endpoint for agents and monitoring tools.
+
+    Query params:
+      days (int, default 30): rolling window for aggregate stats
+      sessions (int, default 25): number of recent sessions to include
+
+    Response shape::
+
+        {
+          "summary": { ... },          # aggregate stats for the window
+          "recent_sessions": [ ... ],  # per-session timing + accuracy
+          "confidence_distribution": { ... },  # item count per score bucket
+          "provider_stats": { ... },   # per-AI-provider breakdown
+        }
+    """
+    days = request.args.get("days", 30, type=int)
+    limit = request.args.get("sessions", 25, type=int)
+    return jsonify({
+        "summary": metrics_service.get_summary(days=days),
+        "recent_sessions": metrics_service.get_recent_sessions(limit=limit),
+        "confidence_distribution": metrics_service.get_confidence_distribution(days=days),
+        "provider_stats": metrics_service.get_provider_stats(days=days),
+    })
+
 
 @main.route("/health")
 def health():
