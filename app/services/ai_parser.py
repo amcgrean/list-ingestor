@@ -124,9 +124,15 @@ def parse_material_list(
             f"(stop_reason={message.stop_reason!r})."
         )
 
-    # Strip accidental markdown fences if Claude adds them
-    raw_content = re.sub(r"^```(?:json)?\s*", "", raw_content)
-    raw_content = re.sub(r"\s*```$", "", raw_content).strip()
+    # Extract JSON from markdown code fence if present (fence may appear after preamble text)
+    fence_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", raw_content)
+    if fence_match:
+        raw_content = fence_match.group(1).strip()
+    else:
+        # No fence — extract the JSON array directly if there's surrounding text
+        array_match = re.search(r"(\[[\s\S]*\])", raw_content)
+        if array_match:
+            raw_content = array_match.group(1).strip()
 
     if not raw_content:
         raise ValueError("Claude response was only a markdown code fence with no content.")
