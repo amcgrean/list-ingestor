@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import threading
 import time
 from typing import Iterable
 
@@ -16,6 +17,7 @@ from app.services.vector_index import VectorIndex
 
 _vector_index: VectorIndex | None = None
 _index_size = 0
+_index_lock = threading.Lock()  # guards index build so only one thread rebuilds at a time
 
 
 def normalise_description(text: str) -> str:
@@ -28,10 +30,17 @@ def normalise_description(text: str) -> str:
 def _ensure_vector_index(erp_items: Iterable[ERPItem], model_name: str) -> VectorIndex:
     global _vector_index, _index_size
     items = list(erp_items)
-    if _vector_index is None or _index_size != len(items) or _vector_index.model_name != model_name:
-        _vector_index = VectorIndex(model_name=model_name)
-        _vector_index.build_index(items)
-        _index_size = len(items)
+    # Fast path: check without lock first
+    if _vector_index is not None and _index_size == len(items) and _vector_index.model_name == model_name:
+        return _vector_index
+    # Slow path: only one thread builds the index at a time
+    with _index_lock:
+        # Re-check inside the lock in case another thread just built it
+        if _vector_index is None or _index_size != len(items) or _vector_index.model_name != model_name:
+            idx = VectorIndex(model_name=model_name)
+            idx.build_index(items)
+            _vector_index = idx
+            _index_size = len(items)
     return _vector_index
 
 
