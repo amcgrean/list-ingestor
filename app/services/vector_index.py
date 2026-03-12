@@ -12,7 +12,10 @@ try:
 except Exception:  # pragma: no cover - exercised by fallback paths
     faiss = None
 
-from sentence_transformers import SentenceTransformer
+try:
+    from sentence_transformers import SentenceTransformer  # type: ignore
+except Exception:  # pragma: no cover - not installed in lightweight deployments
+    SentenceTransformer = None  # type: ignore
 
 
 @dataclass
@@ -24,7 +27,7 @@ class VectorHit:
 class VectorIndex:
     def __init__(self, model_name: str = "sentence-transformers/all-MiniLM-L6-v2"):
         self.model_name = model_name
-        self.model = SentenceTransformer(model_name)
+        self.model = SentenceTransformer(model_name) if SentenceTransformer is not None else None
         self.faiss_index = None
         self.catalog_refs: list = []
         self.catalog_matrix: np.ndarray | None = None
@@ -32,7 +35,7 @@ class VectorIndex:
     def build_index(self, catalog: Iterable):
         # Materialise once; extract only what we need so ORM objects can be GC'd
         items = list(catalog)
-        if not items:
+        if not items or self.model is None:
             self.faiss_index = None
             self.catalog_matrix = None
             self.catalog_refs = []
@@ -58,7 +61,7 @@ class VectorIndex:
         Much more CPU-efficient than calling search() N times because the
         sentence-transformer can batch-process all queries together.
         """
-        if not self.catalog_refs or not queries:
+        if not self.catalog_refs or not queries or self.model is None:
             return [[] for _ in queries]
 
         # Single encode call for all queries — the transformer batches them
