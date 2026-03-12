@@ -19,6 +19,9 @@ _vector_index: VectorIndex | None = None
 _index_size = 0
 _index_lock = threading.Lock()  # guards index build so only one thread rebuilds at a time
 
+import logging as _logging
+_log = _logging.getLogger(__name__)
+
 
 def normalise_description(text: str) -> str:
     text = (text or "").lower().strip()
@@ -40,7 +43,18 @@ def _ensure_vector_index(erp_items: Iterable[ERPItem], model_name: str) -> Vecto
             idx = VectorIndex(model_name=model_name)
             idx.build_index(items)
             _vector_index = idx
-            _index_size = len(items)
+            if idx.catalog_refs:
+                # Only cache as valid when the index actually has content.
+                # If catalog_refs is empty (e.g. model failed to load), leave
+                # _index_size at its previous value so the next request retries.
+                _index_size = len(items)
+            else:
+                _log.warning(
+                    "vector_index_empty: index built for %d items but catalog_refs is empty "
+                    "(sentence-transformers model may have failed to load). "
+                    "Matching will fall back to fuzzy-only.",
+                    len(items),
+                )
     return _vector_index
 
 
@@ -332,6 +346,15 @@ def match_items_batch(
                     "length": item.length,
                 })
 
+            # If vector search returned nothing (broken/empty index), fall back to
+            # pure fuzzy matching across the full catalog so users still get results.
+            if not candidates:
+                _log.warning(
+                    "vector_index_miss: no vector hits for %r — falling back to fuzzy-only matching",
+                    norm_desc,
+                )
+                candidates = _fuzzy_only_candidates(norm_desc, erp_items, size, length, k=k)
+
             candidates.sort(key=lambda x: x["confidence_score"], reverse=True)
             candidates = _apply_feedback_rerank(candidates, feedback_counts)
             candidates = candidates[:k]
@@ -356,6 +379,30 @@ def match_items_batch(
             results[orig_idx] = _no_match()
 
     return [results[i] for i in range(len(descriptions))]
+
+
+def _fuzzy_only_candidates(norm_desc: str, erp_items: list, size, length, k: int = 5) -> list[dict]:
+    """Pure fuzzy match across all catalog items — used when the vector index is unavailable."""
+    from app.services.fuzzy_matcher import fuzzy_match as _fmatch
+    scored = []
+    for item in erp_items:
+        f_score = _fmatch(norm_desc, [item])["score"]
+        final_score = f_score
+        if size and item.size and item.size.lower().replace(" ", "") == size.lower().replace(" ", ""):
+            final_score += 0.08
+        if length and item.length and str(item.length) == str(length):
+            final_score += 0.08
+        scored.append({
+            "sku": item.sku,
+            "description": item.description,
+            "confidence_score": round(min(final_score, 1.0), 4),
+            "fuzzy_score": round(f_score, 4),
+            "vector_score": 0.0,
+            "size": item.size,
+            "length": item.length,
+        })
+    scored.sort(key=lambda x: x["confidence_score"], reverse=True)
+    return scored[:k]
 
 
 def _no_match():

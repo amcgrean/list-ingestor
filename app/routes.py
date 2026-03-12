@@ -539,8 +539,15 @@ def catalog_upload():
     # Rebuild vector index for the current catalog
     all_items = ERPItem.query.all()
     try:
-        item_matcher.build_index(all_items, current_app.config["EMBEDDING_MODEL"])
-        embed_msg = f" Vector index built for {len(all_items)} items."
+        idx = item_matcher.build_index(all_items, current_app.config["EMBEDDING_MODEL"])
+        if idx is not None and idx.catalog_refs:
+            embed_msg = f" Vector index built for {len(all_items)} items."
+        else:
+            embed_msg = (
+                " WARNING: vector index is empty — the sentence-transformers model"
+                " may not be loaded. Matching will use fuzzy-only mode until the"
+                " model is available."
+            )
     except Exception as exc:
         logger.warning("Vector index build failed: %s", exc)
         embed_msg = " (Vector index will be built on first match.)"
@@ -643,6 +650,11 @@ def health():
         except Exception:
             pass
 
+    # Report vector index health without touching the DB
+    vi = item_matcher._vector_index
+    vector_index_items = len(vi.catalog_refs) if vi is not None else 0
+    vector_model_loaded = vi.model is not None if vi is not None else False
+
     status = "ok" if db_ok else "degraded"
     return jsonify({
         "status": status,
@@ -651,4 +663,6 @@ def health():
         "anthropic_key_set": bool(current_app.config.get("ANTHROPIC_API_KEY")),
         "openai_key_set": bool(current_app.config.get("OPENAI_API_KEY")),
         "default_ai_provider": current_app.config.get("DEFAULT_AI_PROVIDER", "claude"),
+        "vector_index_items": vector_index_items,
+        "vector_model_loaded": vector_model_loaded,
     }), 200 if db_ok else 503
