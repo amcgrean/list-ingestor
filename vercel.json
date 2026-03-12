@@ -4,7 +4,6 @@
   ],
   "functions": {
     "api/parse_list.py": {
-      "runtime": "python3.12",
       "maxDuration": 10,
       "memory": 256
     }
