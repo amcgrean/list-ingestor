@@ -5,7 +5,9 @@ from __future__ import annotations
 import re
 from typing import Iterable
 
-from app.models import ERPItem, ItemAlias
+from sqlalchemy import func
+
+from app.models import ERPItem, ItemAlias, MatchFeedbackEvent
 from app.services.fuzzy_matcher import fuzzy_match
 from app.services.size_parser import parse_size_and_length
 from app.services.vector_index import VectorIndex
@@ -44,6 +46,54 @@ def _alias_lookup(description: str):
 
 def _catalog_by_sku(erp_items):
     return {item.sku: item for item in erp_items}
+
+
+def _feedback_counts(normalized_description: str) -> dict[str, int]:
+    if not normalized_description:
+        return {}
+
+    try:
+        rows = (
+            MatchFeedbackEvent.query.with_entities(
+                MatchFeedbackEvent.final_sku,
+                func.count(MatchFeedbackEvent.id),
+            )
+            .filter(
+                MatchFeedbackEvent.normalized_description == normalized_description,
+                MatchFeedbackEvent.final_sku.isnot(None),
+                MatchFeedbackEvent.was_skipped.is_(False),
+            )
+            .group_by(MatchFeedbackEvent.final_sku)
+            .all()
+        )
+    except RuntimeError:
+        return {}
+
+    return {sku: int(count) for sku, count in rows if sku}
+
+
+def _apply_feedback_rerank(candidates: list[dict], feedback_counts: dict[str, int]) -> list[dict]:
+    if not candidates or not feedback_counts:
+        return candidates
+
+    total = sum(feedback_counts.values())
+    if total <= 0:
+        return candidates
+
+    reranked = []
+    for candidate in candidates:
+        sku = candidate["sku"]
+        count = feedback_counts.get(sku, 0)
+        ratio = count / total
+        boost = min(0.2, (ratio * 0.15) + (min(count, 5) * 0.01))
+        updated = dict(candidate)
+        updated["feedback_boost"] = round(boost, 4)
+        updated["feedback_count"] = count
+        updated["confidence_score"] = round(min(updated["confidence_score"] + boost, 1.0), 4)
+        reranked.append(updated)
+
+    reranked.sort(key=lambda x: x["confidence_score"], reverse=True)
+    return reranked
 
 
 def match_item(
@@ -102,6 +152,7 @@ def match_item_candidates(
 
     norm_desc = normalise_description(description)
     size, length = parse_size_and_length(norm_desc)
+    feedback_counts = _feedback_counts(norm_desc)
 
     idx = _ensure_vector_index(erp_items, model_name)
     vector_hits = idx.search(norm_desc, k=max(k * 2, 10))
@@ -131,6 +182,7 @@ def match_item_candidates(
         })
 
     candidates.sort(key=lambda x: x["confidence_score"], reverse=True)
+    candidates = _apply_feedback_rerank(candidates, feedback_counts)
     return candidates[:k]
 
 

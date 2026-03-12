@@ -26,7 +26,7 @@ from flask import (
 from werkzeug.utils import secure_filename
 
 from app import db
-from app.models import ERPItem, ExtractedItem, ProcessingSession, ItemAlias
+from app.models import ERPItem, ExtractedItem, ProcessingSession, ItemAlias, MatchFeedbackEvent
 from app.services import ocr_service, ai_parser, chatgpt_parser, item_matcher
 
 logger = logging.getLogger(__name__)
@@ -271,14 +271,28 @@ def save_review(session_id):
         item.is_confirmed = bool(item_data.get("confirmed", False))
         item.is_skipped = bool(item_data.get("skipped", False))
 
+        alias_key = item_matcher.normalise_description(item.raw_description)
         new_effective_code = item.effective_item_code()
         if new_effective_code and new_effective_code != old_effective_code:
-            alias_key = item_matcher.normalise_description(item.raw_description)
             alias = ItemAlias.query.filter_by(alias=alias_key).first()
             if alias:
                 alias.sku = new_effective_code
             else:
                 db.session.add(ItemAlias(alias=alias_key, sku=new_effective_code))
+
+        db.session.add(MatchFeedbackEvent(
+            session_id=session_id,
+            extracted_item_id=item.id,
+            raw_description=item.raw_description,
+            normalized_description=alias_key,
+            predicted_sku=item.matched_item_code,
+            final_sku=new_effective_code,
+            was_corrected=bool(new_effective_code and new_effective_code != item.matched_item_code),
+            was_skipped=item.is_skipped,
+            confidence_score=float(item.confidence_score or 0.0),
+            fuzzy_score=float(item.fuzzy_score or 0.0),
+            vector_score=float(item.vector_score or 0.0),
+        ))
 
     session.status = "reviewed"
     db.session.commit()

@@ -196,6 +196,6 @@ Output: [
 
 ## Matching Architecture
 
-The matcher now combines: vector similarity (FAISS + sentence-transformers), RapidFuzz string similarity, and structured size/length extraction. User review overrides are persisted to an `item_aliases` table so repeated contractor phrasing resolves to the corrected SKU before running semantic search.
+The matcher now combines: vector similarity (FAISS + sentence-transformers), RapidFuzz string similarity, structured size/length extraction, and feedback-based reranking from historical review outcomes. User review overrides are persisted to an `item_aliases` table so repeated contractor phrasing resolves to the corrected SKU before running semantic search. Every review save also appends a `match_feedback_events` record, which is aggregated by normalized description to boost previously corrected/confirmed SKUs.
 
 CSV catalog uploads can include these optional AI-ready columns in addition to `item_code` and `description`: `material_category`, `size`, `length`, `brand`, `keywords`, `normalized_name`.
