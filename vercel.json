@@ -1,12 +1,16 @@
 {
-  "rewrites": [
-    { "source": "/api/parse-list", "destination": "/api/parse_list" }
-  ],
-  "functions": {
-    "api/parse_list.py": {
-      "maxDuration": 10,
-      "memory": 256,
-      "includeFiles": "services/**"
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/parse_list.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxDuration": 10,
+        "includeFiles": "services/**"
+      }
     }
-  }
+  ],
+  "routes": [
+    { "src": "/api/parse-list", "dest": "/api/parse_list" }
+  ]
 }
