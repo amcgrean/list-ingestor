@@ -464,9 +464,8 @@ def catalog_upload():
     # Normalise column names to lowercase
     df.columns = df.columns.str.lower()
 
-    # Accept "sku" as an alias for "item_code"
     if "sku" in df.columns and "item_code" not in df.columns:
-        df = df.rename(columns={"sku": "item_code"})
+        df.rename(columns={"sku": "item_code"}, inplace=True)
 
     required_cols = {"item_code", "description"}
     missing = required_cols - set(df.columns)
