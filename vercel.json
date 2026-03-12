@@ -19,7 +19,7 @@
     }
   ],
   "routes": [
-    { "src": "/api/parse-list", "dest": "/api/parse_list" },
-    { "src": "/(.*)", "dest": "/api/index" }
+    { "src": "/api/parse-list", "dest": "/api/parse_list.py" },
+    { "src": "/(.*)", "dest": "/api/index.py" }
   ]
 }
