@@ -12,9 +12,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Install Python dependencies before copying source (better layer caching)
+# Install Python dependencies before copying source (better layer caching).
+# Install CPU-only PyTorch first so sentence-transformers picks it up instead
+# of the default CUDA build (~2.3 GB).  The CPU wheel is ~200 MB, cutting the
+# final image size from ~4 GB down to roughly 1.5 GB.
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
+ && pip install --no-cache-dir -r requirements.txt
 
 # Copy source
 COPY . .
@@ -33,4 +37,4 @@ EXPOSE 8000
 # Single worker — the sentence-transformers model + FAISS index are kept in
 # process memory; multiple workers would each load their own copy and quickly
 # exhaust RAM even on the Standard 2 GB plan.
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "1", "--timeout", "300", "run:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "1", "--timeout", "300", "--worker-tmp-dir", "/dev/shm", "run:app"]

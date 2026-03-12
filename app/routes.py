@@ -325,12 +325,18 @@ def export(session_id, fmt):
     session = ProcessingSession.query.get_or_404(session_id)
     items = ExtractedItem.query.filter_by(session_id=session_id).all()
 
+    # Collect all item codes in one pass, then load ERP records in a single query
+    active_items = [item for item in items if not item.is_skipped]
+    codes_needed = list({item.effective_item_code() for item in active_items if item.effective_item_code()})
+    erp_by_code = (
+        {e.item_code: e for e in ERPItem.query.filter(ERPItem.item_code.in_(codes_needed)).all()}
+        if codes_needed else {}
+    )
+
     rows = []
-    for item in items:
-        if item.is_skipped:
-            continue
+    for item in active_items:
         code = item.effective_item_code()
-        erp = ERPItem.query.filter_by(item_code=code).first() if code else None
+        erp = erp_by_code.get(code) if code else None
         rows.append({
             "quantity": item.effective_quantity(),
             "item_code": code or "",
@@ -421,15 +427,29 @@ def catalog_upload():
         ERPItem.query.delete()
         db.session.commit()
 
-    added = 0
-    updated = 0
+    # Build a list of valid rows first
+    valid_rows = []
     for _, row in df.iterrows():
         code = str(row["item_code"]).strip()
         desc = str(row["description"]).strip()
-        if not code or not desc:
-            continue
+        if code and desc:
+            valid_rows.append((code, row))
 
-        existing = ERPItem.query.filter_by(item_code=code).first()
+    # Load all existing items in one query instead of N per-row SELECTs
+    all_codes = [code for code, _ in valid_rows]
+    existing_map = {}
+    if all_codes:
+        existing_map = {
+            item.item_code: item
+            for item in ERPItem.query.filter(ERPItem.item_code.in_(all_codes)).all()
+        }
+
+    added = 0
+    updated = 0
+    _CHUNK = 500  # flush to DB in chunks to keep transaction memory bounded
+    for i, (code, row) in enumerate(valid_rows):
+        desc = str(row["description"]).strip()
+        existing = existing_map.get(code)
         if existing:
             existing.description = desc
             existing.keywords = str(row.get("keywords", "")).strip()
@@ -457,6 +477,10 @@ def catalog_upload():
             )
             db.session.add(item)
             added += 1
+
+        # Flush in chunks so the session doesn't accumulate unbounded objects
+        if (i + 1) % _CHUNK == 0:
+            db.session.flush()
 
     db.session.commit()
 
