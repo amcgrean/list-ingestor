@@ -2,10 +2,11 @@
 OCR Service
 -----------
 Extracts text from uploaded images and PDFs using pytesseract.
-Applies preprocessing (grayscale, contrast boost, thresholding) to improve accuracy.
+Applies preprocessing (grayscale, contrast boost, sharpening) to improve accuracy.
+Binarisation is intentionally left to Tesseract's internal engine, which uses
+locally-adaptive thresholding far superior to any fixed global threshold.
 """
 
-import os
 import time
 import logging
 from pathlib import Path
@@ -24,47 +25,59 @@ except ImportError:
     PDF_SUPPORT = False
     logger.warning("pdf2image not installed — PDF uploads will not be supported.")
 
-# Maximum dimension (px) before downscaling; keeps RAM under ~25 MB per image
-_MAX_IMAGE_DIM = 2000
-# PDF render DPI — 120 is readable for printed text and uses less CPU/RAM than 150
-_PDF_DPI = 120
+# Hard ceiling (px) on longest side to keep RAM bounded (~30 MB/image max)
+_MAX_IMAGE_DIM = 2400
+# Minimum size (px) for reliable OCR — upscale anything smaller so Tesseract
+# has enough resolution to distinguish character strokes
+_MIN_IMAGE_DIM = 1400
+# PDF render DPI — 150 produces reliable text quality without the RAM spike
+# that 300 DPI caused (502s); 120 was too low and caused missed characters
+_PDF_DPI = 150
 # Cap pages to avoid unbounded memory on large PDFs
 _MAX_PDF_PAGES = 10
-# Tesseract config — oem 1 = LSTM only (faster, skips legacy engine)
-_TESS_CONFIG = "--psm 6 --oem 1"
+# Tesseract config:
+#   --psm 4  = single column of text (suits material lists better than
+#              psm 6's assumption of a single uniform text block)
+#   --oem 3  = hybrid legacy + LSTM engine (most accurate; oem 1 LSTM-only
+#              was faster but missed numbers and short abbreviations)
+_TESS_CONFIG = "--psm 4 --oem 3"
 # Short sleep between pages to yield CPU on single-core hosts (seconds)
 _PAGE_YIELD_SECS = 0.05
 
 
-def _downscale(img: Image.Image, max_dim: int = _MAX_IMAGE_DIM) -> Image.Image:
-    """Scale down an image so its longest side is at most max_dim pixels."""
+def _fit_image(img: Image.Image) -> Image.Image:
+    """
+    Ensure the image's longest side sits between _MIN_IMAGE_DIM and _MAX_IMAGE_DIM.
+    Upscaling low-res photos gives Tesseract enough pixel density to read fine text;
+    downscaling huge images keeps RAM in check.
+    """
     w, h = img.size
-    if max(w, h) <= max_dim:
+    longest = max(w, h)
+    if longest < _MIN_IMAGE_DIM:
+        scale = _MIN_IMAGE_DIM / longest
+    elif longest > _MAX_IMAGE_DIM:
+        scale = _MAX_IMAGE_DIM / longest
+    else:
         return img
-    scale = max_dim / max(w, h)
     return img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
 
 
 def preprocess_image(img: Image.Image) -> Image.Image:
     """
-    Apply grayscale, contrast enhancement, and adaptive thresholding
-    to maximise OCR accuracy on photos of printed material lists.
+    Prepare an image for Tesseract: fit to a useful size, convert to grayscale,
+    lightly boost contrast, and sharpen edges.
+
+    We deliberately omit a fixed binary threshold here.  A global point-threshold
+    destroys faint text, shadows, and uneven lighting — all common in phone photos
+    of material lists.  Tesseract's own locally-adaptive Otsu binarisation handles
+    these cases far better when given a clean greyscale input.
     """
-    # Downscale first to reduce RAM usage before expensive operations
-    img = _downscale(img)
-
-    # Convert to grayscale
+    img = _fit_image(img)
     img = img.convert("L")
-
-    # Enhance contrast
-    img = ImageEnhance.Contrast(img).enhance(2.0)
-
-    # Sharpen slightly to help with out-of-focus photos
+    # Mild contrast lift — brings text forward without blowing out fine strokes
+    img = ImageEnhance.Contrast(img).enhance(1.5)
+    # Edge sharpening helps with slightly out-of-focus captures
     img = img.filter(ImageFilter.SHARPEN)
-
-    # Binarise with Pillow's built-in point threshold (fast & effective)
-    img = img.point(lambda p: 255 if p > 140 else 0)
-
     return img
 
 
