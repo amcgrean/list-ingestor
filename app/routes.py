@@ -8,6 +8,7 @@ import io
 import json
 import logging
 import os
+import tempfile
 import time
 import uuid
 from pathlib import Path
@@ -52,10 +53,17 @@ def allowed_file(filename: str) -> bool:
 
 def save_upload(file) -> Path:
     ext = Path(secure_filename(file.filename)).suffix
-    unique_name = f"{uuid.uuid4().hex}{ext}"
-    dest = Path(current_app.config["UPLOAD_FOLDER"]) / unique_name
-    file.save(dest)
-    return dest
+    fd, tmp_path = tempfile.mkstemp(suffix=ext)
+    try:
+        os.close(fd)
+        file.save(tmp_path)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+    return Path(tmp_path)
 
 
 # ---------------------------------------------------------------------------
