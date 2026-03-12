@@ -50,23 +50,43 @@ class VectorIndex:
             self.faiss_index.add(self.catalog_matrix)
 
     def search(self, query: str, k: int = 5) -> List[VectorHit]:
-        if not self.catalog_refs:
-            return []
+        return self.search_batch([query], k=k)[0]
 
-        q_vec = self.model.encode([query], convert_to_numpy=True, normalize_embeddings=True).astype("float32")
+    def search_batch(self, queries: List[str], k: int = 5) -> List[List[VectorHit]]:
+        """Encode all queries in one forward pass then search for each.
 
-        if self.faiss_index is not None:
-            scores, idx = self.faiss_index.search(q_vec, min(k, len(self.catalog_refs)))
-            hits = []
-            for score, i in zip(scores[0], idx[0]):
-                if i < 0:
-                    continue
-                hits.append(VectorHit(sku=self.catalog_refs[i], score=float(max(0.0, score))))
-            return hits
+        Much more CPU-efficient than calling search() N times because the
+        sentence-transformer can batch-process all queries together.
+        """
+        if not self.catalog_refs or not queries:
+            return [[] for _ in queries]
 
-        sims = (self.catalog_matrix @ q_vec[0]).tolist() if self.catalog_matrix is not None else []
-        ordered = sorted(enumerate(sims), key=lambda x: x[1], reverse=True)[:k]
-        return [
-            VectorHit(sku=self.catalog_refs[i], score=float(max(0.0, score)))
-            for i, score in ordered
-        ]
+        # Single encode call for all queries — the transformer batches them
+        q_vecs = self.model.encode(
+            queries, convert_to_numpy=True, normalize_embeddings=True
+        ).astype("float32")
+
+        n = min(k, len(self.catalog_refs))
+        results: List[List[VectorHit]] = []
+
+        for q_vec in q_vecs:
+            q_vec = q_vec.reshape(1, -1)
+            if self.faiss_index is not None:
+                scores, idx = self.faiss_index.search(q_vec, n)
+                hits = [
+                    VectorHit(sku=self.catalog_refs[i], score=float(max(0.0, score)))
+                    for score, i in zip(scores[0], idx[0])
+                    if i >= 0
+                ]
+            elif self.catalog_matrix is not None:
+                sims = (self.catalog_matrix @ q_vec[0]).tolist()
+                ordered = sorted(enumerate(sims), key=lambda x: x[1], reverse=True)[:k]
+                hits = [
+                    VectorHit(sku=self.catalog_refs[i], score=float(max(0.0, score)))
+                    for i, score in ordered
+                ]
+            else:
+                hits = []
+            results.append(hits)
+
+        return results

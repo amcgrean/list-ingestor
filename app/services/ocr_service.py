@@ -6,6 +6,7 @@ Applies preprocessing (grayscale, contrast boost, thresholding) to improve accur
 """
 
 import os
+import time
 import logging
 from pathlib import Path
 from typing import Union
@@ -25,10 +26,14 @@ except ImportError:
 
 # Maximum dimension (px) before downscaling; keeps RAM under ~25 MB per image
 _MAX_IMAGE_DIM = 2000
-# PDF render DPI — 150 is plenty for printed text and uses 4× less RAM than 300
-_PDF_DPI = 150
+# PDF render DPI — 120 is readable for printed text and uses less CPU/RAM than 150
+_PDF_DPI = 120
 # Cap pages to avoid unbounded memory on large PDFs
 _MAX_PDF_PAGES = 10
+# Tesseract config — oem 1 = LSTM only (faster, skips legacy engine)
+_TESS_CONFIG = "--psm 6 --oem 1"
+# Short sleep between pages to yield CPU on single-core hosts (seconds)
+_PAGE_YIELD_SECS = 0.05
 
 
 def _downscale(img: Image.Image, max_dim: int = _MAX_IMAGE_DIM) -> Image.Image:
@@ -71,10 +76,7 @@ def extract_text_from_image(image_path: Union[str, Path]) -> str:
     try:
         img = Image.open(image_path)
         img = preprocess_image(img)
-        text = pytesseract.image_to_string(
-            img,
-            config="--psm 6 --oem 3",  # psm 6 = assume uniform block of text
-        )
+        text = pytesseract.image_to_string(img, config=_TESS_CONFIG)
         img.close()
         return text.strip()
     except Exception as exc:
@@ -110,13 +112,15 @@ def extract_text_from_pdf(pdf_path: Union[str, Path], dpi: int = _PDF_DPI) -> st
                 break
             try:
                 processed = preprocess_image(page_img)
-                text = pytesseract.image_to_string(processed, config="--psm 6 --oem 3")
+                text = pytesseract.image_to_string(processed, config=_TESS_CONFIG)
                 texts.append(text.strip())
             except Exception as exc:
                 logger.warning("OCR failed for page %d: %s", page_num, exc)
                 texts.append(f"[OCR failed for page {page_num}]")
             finally:
                 page_img.close()
+            # Yield CPU between pages so the web worker stays responsive
+            time.sleep(_PAGE_YIELD_SECS)
     except Exception as exc:
         logger.exception("PDF conversion failed for %s", pdf_path)
         raise RuntimeError(f"Could not convert PDF to images: {exc}") from exc
