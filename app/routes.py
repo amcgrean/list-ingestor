@@ -378,14 +378,17 @@ def catalog_upload():
         flash(f"Could not parse CSV: {exc}", "error")
         return redirect(url_for("main.catalog"))
 
+    # Normalise column names to lowercase
+    df.columns = df.columns.str.lower()
+
+    if "sku" in df.columns and "item_code" not in df.columns:
+        df.rename(columns={"sku": "item_code"}, inplace=True)
+
     required_cols = {"item_code", "description"}
-    missing = required_cols - set(df.columns.str.lower())
+    missing = required_cols - set(df.columns)
     if missing:
         flash(f"CSV is missing required columns: {', '.join(missing)}", "error")
         return redirect(url_for("main.catalog"))
-
-    # Normalise column names to lowercase
-    df.columns = df.columns.str.lower()
 
     replace_all = request.form.get("replace_all") == "1"
     if replace_all:
