@@ -29,24 +29,15 @@
     </div>
 
     <div class="provider-selector">
-      <label class="provider-label">AI Parser</label>
+      <label class="provider-label">Image Reader</label>
       <div class="provider-options">
-        {% if claude_available %}
-        <label class="provider-option {% if default_provider == 'claude' %}provider-option--default{% endif %}">
-          <input type="radio" name="ai_provider" value="claude" {% if default_provider == 'claude' %}checked{% endif %} />
-          <span class="provider-name">Claude</span>
-          <span class="provider-tag">Anthropic</span>
-        </label>
-        {% endif %}
         {% if openai_available %}
-        <label class="provider-option {% if default_provider == 'openai' %}provider-option--default{% endif %}">
-          <input type="radio" name="ai_provider" value="openai" {% if default_provider == 'openai' or not claude_available %}checked{% endif %} />
-          <span class="provider-name">ChatGPT</span>
+        <label class="provider-option provider-option--default">
+          <span class="provider-name">Vision API</span>
           <span class="provider-tag">OpenAI</span>
         </label>
-        {% endif %}
-        {% if not claude_available and not openai_available %}
-        <p class="provider-none">No AI provider configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY.</p>
+        {% else %}
+        <p class="provider-none">OpenAI Vision is not configured. Set OPENAI_API_KEY.</p>
         {% endif %}
       </div>
     </div>

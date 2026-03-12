@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/index.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxDuration": 30,
+        "includeFiles": ["app/**", "services/**", "config.py"]
+      }
+    },
+    {
+      "src": "api/parse_list.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxDuration": 10,
+        "includeFiles": "services/**"
+      }
+    }
+  ],
+  "routes": [
+    { "src": "/api/parse-list", "dest": "/api/parse_list.py" },
+    { "src": "/(.*)", "dest": "/api/index.py" }
+  ]
+}

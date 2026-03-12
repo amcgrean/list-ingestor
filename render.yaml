@@ -19,7 +19,7 @@ services:
     name: list-ingestor
     runtime: docker                    # Uses the repo's Dockerfile
     dockerfilePath: ./Dockerfile
-    plan: starter                      # Upgrade to standard for production
+    plan: standard
     healthCheckPath: /health
     autoDeploy: true                   # Re-deploy on every push to the branch
 

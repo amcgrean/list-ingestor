@@ -15,6 +15,7 @@
       <div class="nav-links">
         <a href="{{ url_for('main.index') }}" {% if request.endpoint == 'main.index' %}class="active"{% endif %}>Upload</a>
         <a href="{{ url_for('main.catalog') }}" {% if request.endpoint and 'catalog' in request.endpoint %}class="active"{% endif %}>ERP Catalog</a>
+        <a href="{{ url_for('main.metrics_dashboard') }}" {% if request.endpoint and 'metrics' in request.endpoint %}class="active"{% endif %}>Metrics</a>
       </div>
     </div>
   </nav>

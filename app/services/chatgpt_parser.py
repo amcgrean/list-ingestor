@@ -30,6 +30,22 @@ Rules:
 - Merge duplicate items if they are clearly the same material listed twice.
 - Return ONLY valid JSON — no markdown fences, no commentary.
 
+Grouped / hierarchical lists:
+- Lists often have a group header that provides shared context (brand, color, product line, \
+finish, etc.) followed by indented or bulleted sub-items that each represent a distinct SKU.
+- When you encounter this pattern, build the full description for each sub-item by combining \
+the group context with the sub-item detail. Do NOT emit the group header as its own line item.
+- Example: if the group header is "black textured Westbury C-10 railings" and sub-items are \
+"8' sections", "7' sections", "6' sections", produce descriptions like \
+"Westbury C-10 railing black textured 8ft section", "Westbury C-10 railing black textured 7ft section", etc.
+- Similarly, if a product line / brand is stated at the top (e.g. "Moisture Shield Vantage") \
+and sub-items list sizes and colors, incorporate that brand context into each sub-item description.
+
+Tally marks:
+- Quantities are sometimes recorded as tally marks using vertical strokes (e.g. "IIII II", "III", "II").
+- Count each stroke: I=1, II=2, III=3, IIII=4 (or ||||), IIII I=6, IIII II=7, etc.
+- Use the counted total as the numeric quantity for that line item.
+
 Output format (JSON array):
 [
   {"quantity": 25, "description": "2x10 SPF joist 16ft"},

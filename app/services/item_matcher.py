@@ -1,263 +1,416 @@
-"""
-Item Matcher Service
---------------------
-Matches extracted descriptions to ERP catalog items using a hybrid approach:
+"""Hybrid SKU item matching service."""
 
-  1. Fuzzy text matching via RapidFuzz (token_set_ratio)
-  2. Vector cosine similarity via sentence-transformers
+from __future__ import annotations
 
-  final_score = (fuzzy_score * FUZZY_WEIGHT) + (vector_score * VECTOR_WEIGHT)
-
-Also normalises common lumber/construction formats before matching.
-"""
-
-import logging
 import re
-from typing import Optional
+import threading
+import time
+from typing import Iterable
 
-import numpy as np
-from rapidfuzz import fuzz
-from sentence_transformers import SentenceTransformer
+from sqlalchemy import func
 
-logger = logging.getLogger(__name__)
-
-# Lazy-loaded singleton so the model is downloaded only once
-_model: Optional[SentenceTransformer] = None
-
-
-def _get_model(model_name: str) -> SentenceTransformer:
-    global _model
-    if _model is None:
-        logger.info("Loading sentence-transformers model: %s", model_name)
-        _model = SentenceTransformer(model_name)
-    return _model
+from app.models import ERPItem, ItemAlias, MatchFeedbackEvent
+from app.services.fuzzy_matcher import fuzzy_match
+from app.services.size_parser import parse_size_and_length
+from app.services.vector_index import VectorIndex
 
 
-# ---------------------------------------------------------------------------
-# Normalisation helpers
-# ---------------------------------------------------------------------------
+_vector_index: VectorIndex | None = None
+_index_size = 0
+_index_lock = threading.Lock()  # guards index build so only one thread rebuilds at a time
 
-_LENGTH_WORDS = {
-    "eight": "8", "ten": "10", "twelve": "12", "fourteen": "14",
-    "sixteen": "16", "eighteen": "18", "twenty": "20",
-    "twentyfour": "24", "twenty four": "24",
-}
-
-_UNIT_NORMALISATION = {
-    r"\blf\b": "linear feet",
-    r"\blin\b": "linear",
-    r"\bft\b": "ft",
-    r"\bpcs?\b": "piece",
-    r"\bpkgs?\b": "package",
-    r"\blbs?\b": "lb",
-    r"\bpd\b": "lb",
-    r"\bsf\b": "square feet",
-    r"\bbf\b": "board feet",
-    r"\bea\b": "each",
-}
+import logging as _logging
+_log = _logging.getLogger(__name__)
 
 
 def normalise_description(text: str) -> str:
-    """
-    Convert common construction shorthand to expanded form so fuzzy / vector
-    matching has more surface area to work with.
-
-    Examples:
-        "2x10x16"      → "2x10 16ft"
-        "2x10 sixteen" → "2x10 16ft"
-        "3/4 cdx ply"  → "3/4 cdx plywood"
-    """
-    text = text.lower().strip()
-
-    # Expand written-out lengths ("sixteen" → "16")
-    for word, digit in _LENGTH_WORDS.items():
-        text = re.sub(r"\b" + word + r"\b", digit, text)
-
-    # Expand unit abbreviations
-    for pattern, replacement in _UNIT_NORMALISATION.items():
-        text = re.sub(pattern, replacement, text)
-
-    # "2x10x16" → "2x10 16ft"
-    text = re.sub(r"(\d+x\d+)x(\d+)", r"\1 \2ft", text)
-
-    # "2x10 16" (number after dimension) → "2x10 16ft"
-    text = re.sub(r"(\d+x\d+)\s+(\d+)(?!\s*ft|\s*inch|\s*in\b)", r"\1 \2ft", text)
-
-    # Expand "ply" → "plywood"
-    text = re.sub(r"\bply\b", "plywood", text)
-
-    # Expand "pt" → "pressure treated" (common in lumber)
+    text = (text or "").lower().strip()
+    text = re.sub(r"(\d+x\d+)x(\d{1,2})", r"\1 \2ft", text)
     text = re.sub(r"\bpt\b", "pressure treated", text)
-
-    return text.strip()
-
-
-# ---------------------------------------------------------------------------
-# Embedding helpers
-# ---------------------------------------------------------------------------
-
-def _embed(texts: list[str], model_name: str) -> np.ndarray:
-    model = _get_model(model_name)
-    return model.encode(texts, convert_to_numpy=True, normalize_embeddings=True)
+    return re.sub(r"\s+", " ", text)
 
 
-def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
-    """Cosine similarity between two normalised vectors (dot product)."""
-    return float(np.dot(a, b))
+def _ensure_vector_index(erp_items: Iterable[ERPItem], model_name: str) -> VectorIndex:
+    global _vector_index, _index_size
+    items = list(erp_items)
+    # Fast path: check without lock first
+    if _vector_index is not None and _index_size == len(items) and _vector_index.model_name == model_name:
+        return _vector_index
+    # Slow path: only one thread builds the index at a time
+    with _index_lock:
+        # Re-check inside the lock in case another thread just built it
+        if _vector_index is None or _index_size != len(items) or _vector_index.model_name != model_name:
+            idx = VectorIndex(model_name=model_name)
+            idx.build_index(items)
+            _vector_index = idx
+            if idx.catalog_refs:
+                # Only cache as valid when the index actually has content.
+                # If catalog_refs is empty (e.g. model failed to load), leave
+                # _index_size at its previous value so the next request retries.
+                _index_size = len(items)
+            else:
+                _log.warning(
+                    "vector_index_empty: index built for %d items but catalog_refs is empty "
+                    "(sentence-transformers model may have failed to load). "
+                    "Matching will fall back to fuzzy-only.",
+                    len(items),
+                )
+    return _vector_index
 
 
-# ---------------------------------------------------------------------------
-# Catalog embedding pre-computation
-# ---------------------------------------------------------------------------
-
-def compute_catalog_embeddings(erp_items: list, model_name: str) -> None:
-    """
-    Compute and store embeddings for all ERPItem objects in place.
-    Call this after loading a new catalog or on first run.
-    """
-    if not erp_items:
-        return
-
-    texts = [normalise_description(item.searchable_text) for item in erp_items]
-    embeddings = _embed(texts, model_name)
-
-    for item, emb in zip(erp_items, embeddings):
-        item.embedding = emb.tolist()
-
-    logger.info("Computed embeddings for %d ERP items.", len(erp_items))
+def build_index(catalog, model_name: str):
+    idx = _ensure_vector_index(catalog, model_name)
+    return idx
 
 
-# ---------------------------------------------------------------------------
-# Matching
-# ---------------------------------------------------------------------------
+def _alias_lookup(description: str):
+    normalized = normalise_description(description)
+    return ItemAlias.query.filter_by(alias=normalized).first()
 
-MatchResult = dict  # typed for readability
+
+def _alias_lookup_batch(descriptions: list[str]) -> dict[str, str]:
+    """Return {normalized_description: sku} for all descriptions in one query."""
+    normalized = [normalise_description(d) for d in descriptions]
+    unique = list(set(normalized))
+    if not unique:
+        return {}
+    try:
+        rows = ItemAlias.query.filter(ItemAlias.alias.in_(unique)).all()
+    except RuntimeError:
+        return {}
+    return {row.alias: row.sku for row in rows}
+
+
+def _catalog_by_sku(erp_items):
+    return {item.sku: item for item in erp_items}
+
+
+def _feedback_counts(normalized_description: str) -> dict[str, int]:
+    if not normalized_description:
+        return {}
+
+    try:
+        rows = (
+            MatchFeedbackEvent.query.with_entities(
+                MatchFeedbackEvent.final_sku,
+                func.count(MatchFeedbackEvent.id),
+            )
+            .filter(
+                MatchFeedbackEvent.normalized_description == normalized_description,
+                MatchFeedbackEvent.final_sku.isnot(None),
+                MatchFeedbackEvent.was_skipped.is_(False),
+            )
+            .group_by(MatchFeedbackEvent.final_sku)
+            .all()
+        )
+    except RuntimeError:
+        return {}
+
+    return {sku: int(count) for sku, count in rows if sku}
+
+
+def _feedback_counts_batch(normalized_descriptions: list[str]) -> dict[str, dict[str, int]]:
+    """Return {normalized_description: {sku: count}} for all descriptions in one query."""
+    unique = list(set(d for d in normalized_descriptions if d))
+    if not unique:
+        return {}
+    try:
+        rows = (
+            MatchFeedbackEvent.query.with_entities(
+                MatchFeedbackEvent.normalized_description,
+                MatchFeedbackEvent.final_sku,
+                func.count(MatchFeedbackEvent.id),
+            )
+            .filter(
+                MatchFeedbackEvent.normalized_description.in_(unique),
+                MatchFeedbackEvent.final_sku.isnot(None),
+                MatchFeedbackEvent.was_skipped.is_(False),
+            )
+            .group_by(MatchFeedbackEvent.normalized_description, MatchFeedbackEvent.final_sku)
+            .all()
+        )
+    except RuntimeError:
+        return {}
+
+    result: dict[str, dict[str, int]] = {}
+    for norm_desc, sku, count in rows:
+        if norm_desc and sku:
+            result.setdefault(norm_desc, {})[sku] = int(count)
+    return result
+
+
+def _apply_feedback_rerank(candidates: list[dict], feedback_counts: dict[str, int]) -> list[dict]:
+    if not candidates or not feedback_counts:
+        return candidates
+
+    total = sum(feedback_counts.values())
+    if total <= 0:
+        return candidates
+
+    reranked = []
+    for candidate in candidates:
+        sku = candidate["sku"]
+        count = feedback_counts.get(sku, 0)
+        ratio = count / total
+        boost = min(0.2, (ratio * 0.15) + (min(count, 5) * 0.01))
+        updated = dict(candidate)
+        updated["feedback_boost"] = round(boost, 4)
+        updated["feedback_count"] = count
+        updated["confidence_score"] = round(min(updated["confidence_score"] + boost, 1.0), 4)
+        reranked.append(updated)
+
+    reranked.sort(key=lambda x: x["confidence_score"], reverse=True)
+    return reranked
 
 
 def match_item(
     description: str,
-    erp_items: list,
+    erp_items: list[ERPItem],
     model_name: str,
     fuzzy_weight: float = 0.4,
     vector_weight: float = 0.6,
-) -> MatchResult:
-    """
-    Find the best-matching ERP catalog item for a given extracted description.
-
-    Returns a dict with:
-        matched_item_code   – str or None
-        matched_description – str or None
-        confidence_score    – float 0-1
-        fuzzy_score         – float 0-1
-        vector_score        – float 0-1
-    """
-    if not erp_items:
+):
+    results = match_item_candidates(
+        description,
+        erp_items,
+        model_name=model_name,
+        fuzzy_weight=fuzzy_weight,
+        vector_weight=vector_weight,
+        k=5,
+    )
+    if not results:
         return _no_match()
 
-    norm_desc = normalise_description(description)
-
-    # --- Fuzzy scoring ---
-    fuzzy_scores = []
-    for item in erp_items:
-        norm_catalog = normalise_description(item.searchable_text)
-        score = fuzz.token_set_ratio(norm_desc, norm_catalog) / 100.0
-        fuzzy_scores.append(score)
-
-    # --- Vector scoring ---
-    query_emb = _embed([norm_desc], model_name)[0]
-
-    vector_scores = []
-    for item in erp_items:
-        if item.embedding is not None:
-            item_emb = np.array(item.embedding, dtype=np.float32)
-            # Normalise in case it wasn't stored normalised
-            norm = np.linalg.norm(item_emb)
-            if norm > 0:
-                item_emb = item_emb / norm
-            sim = cosine_similarity(query_emb, item_emb)
-            # Clamp to [0, 1] — cosine can be slightly negative for dissimilar texts
-            vector_scores.append(max(0.0, sim))
-        else:
-            vector_scores.append(0.0)
-
-    # --- Combined score ---
-    combined = [
-        (f * fuzzy_weight) + (v * vector_weight)
-        for f, v in zip(fuzzy_scores, vector_scores)
-    ]
-
-    best_idx = int(np.argmax(combined))
-    best_item = erp_items[best_idx]
-
+    top = results[0]
     return {
-        "matched_item_code": best_item.item_code,
-        "matched_description": best_item.description,
-        "confidence_score": round(combined[best_idx], 4),
-        "fuzzy_score": round(fuzzy_scores[best_idx], 4),
-        "vector_score": round(vector_scores[best_idx], 4),
+        "matched_item_code": top["sku"],
+        "matched_description": top["description"],
+        "confidence_score": top["confidence_score"],
+        "fuzzy_score": top["fuzzy_score"],
+        "vector_score": top["vector_score"],
+        "candidates": results,
     }
+
+
+def match_item_candidates(
+    description: str,
+    erp_items: list[ERPItem],
+    model_name: str,
+    fuzzy_weight: float = 0.4,
+    vector_weight: float = 0.6,
+    k: int = 5,
+):
+    if not erp_items:
+        return []
+
+    alias = _alias_lookup(description)
+    by_sku = _catalog_by_sku(erp_items)
+    if alias and alias.sku in by_sku:
+        item = by_sku[alias.sku]
+        return [{
+            "sku": item.sku,
+            "description": item.description,
+            "confidence_score": 1.0,
+            "fuzzy_score": 1.0,
+            "vector_score": 1.0,
+            "size": item.size,
+            "length": item.length,
+        }]
+
+    norm_desc = normalise_description(description)
+    size, length = parse_size_and_length(norm_desc)
+    feedback_counts = _feedback_counts(norm_desc)
+
+    idx = _ensure_vector_index(erp_items, model_name)
+    vector_hits = idx.search(norm_desc, k=max(k * 2, 10))
+    vector_scores = {hit.sku: hit.score for hit in vector_hits}
+
+    candidates = []
+    for sku, v_score in vector_scores.items():
+        item = by_sku.get(sku)
+        if not item:
+            continue
+        f_score = fuzzy_match(norm_desc, [item])["score"]
+        final_score = (v_score * vector_weight) + (f_score * fuzzy_weight)
+
+        if size and item.size and item.size.lower().replace(" ", "") == size.lower().replace(" ", ""):
+            final_score += 0.08
+        if length and item.length and str(item.length) == str(length):
+            final_score += 0.08
+
+        candidates.append({
+            "sku": item.sku,
+            "description": item.description,
+            "confidence_score": round(min(final_score, 1.0), 4),
+            "fuzzy_score": round(f_score, 4),
+            "vector_score": round(v_score, 4),
+            "size": item.size,
+            "length": item.length,
+        })
+
+    candidates.sort(key=lambda x: x["confidence_score"], reverse=True)
+    candidates = _apply_feedback_rerank(candidates, feedback_counts)
+    return candidates[:k]
 
 
 def match_items_batch(
     descriptions: list[str],
-    erp_items: list,
+    erp_items: list[ERPItem],
     model_name: str,
     fuzzy_weight: float = 0.4,
     vector_weight: float = 0.6,
-) -> list[MatchResult]:
-    """Batch version — pre-embeds all queries in one shot for efficiency."""
-    if not erp_items:
-        return [_no_match() for _ in descriptions]
+):
+    """Match a batch of descriptions against the catalog.
 
-    norm_descs = [normalise_description(d) for d in descriptions]
+    Encodes all query descriptions in a single transformer forward pass
+    (via search_batch) instead of N separate encode calls, which
+    significantly reduces CPU load on single-core hosts like Render.
 
-    # Embed all queries at once
-    query_embs = _embed(norm_descs, model_name)
+    Uses two bulk DB queries (one for aliases, one for feedback history)
+    regardless of batch size, replacing the previous O(n) per-item queries.
+    """
+    if not descriptions:
+        return []
 
-    # Build catalog embedding matrix
-    catalog_embs = []
-    for item in erp_items:
-        if item.embedding is not None:
-            emb = np.array(item.embedding, dtype=np.float32)
-            norm = np.linalg.norm(emb)
-            catalog_embs.append(emb / norm if norm > 0 else emb)
+    by_sku = _catalog_by_sku(erp_items)
+
+    # --- Single bulk alias lookup for all descriptions ---
+    alias_map = _alias_lookup_batch(descriptions)  # {norm_desc: sku}
+
+    # Separate alias-resolved items from those that need vector search
+    results: dict[int, dict] = {}
+    needs_vector: list[tuple[int, str, str, tuple]] = []  # (idx, description, norm_desc, size_length)
+
+    for i, description in enumerate(descriptions):
+        norm_desc = normalise_description(description)
+        resolved_sku = alias_map.get(norm_desc)
+        if resolved_sku and resolved_sku in by_sku:
+            item = by_sku[resolved_sku]
+            results[i] = {
+                "matched_item_code": item.sku,
+                "matched_description": item.description,
+                "confidence_score": 1.0,
+                "fuzzy_score": 1.0,
+                "vector_score": 1.0,
+                "candidates": [{
+                    "sku": item.sku,
+                    "description": item.description,
+                    "confidence_score": 1.0,
+                    "fuzzy_score": 1.0,
+                    "vector_score": 1.0,
+                    "size": item.size,
+                    "length": item.length,
+                }],
+            }
         else:
-            catalog_embs.append(np.zeros(query_embs.shape[1], dtype=np.float32))
+            size_length = parse_size_and_length(norm_desc)
+            needs_vector.append((i, description, norm_desc, size_length))
 
-    catalog_matrix = np.stack(catalog_embs)  # (n_items, dim)
+    # --- Single bulk feedback query for all remaining descriptions ---
+    norm_descs_needing_feedback = [norm_desc for _, _, norm_desc, _ in needs_vector]
+    all_feedback = _feedback_counts_batch(norm_descs_needing_feedback)
 
-    results = []
-    for i, (norm_desc, q_emb) in enumerate(zip(norm_descs, query_embs)):
-        fuzzy_scores = [
-            fuzz.token_set_ratio(norm_desc, normalise_description(item.searchable_text)) / 100.0
-            for item in erp_items
-        ]
-        vector_sims = np.clip(catalog_matrix @ q_emb, 0, 1).tolist()
+    # Batch-encode all remaining queries in one transformer call
+    if needs_vector and erp_items:
+        idx = _ensure_vector_index(erp_items, model_name)
+        k = 5
+        norm_queries = [norm_desc for _, _, norm_desc, _ in needs_vector]
+        batch_hits = idx.search_batch(norm_queries, k=max(k * 2, 10))
 
-        combined = [
-            (f * fuzzy_weight) + (v * vector_weight)
-            for f, v in zip(fuzzy_scores, vector_sims)
-        ]
+        for (orig_idx, description, norm_desc, (size, length)), vector_hits in zip(
+            needs_vector, batch_hits
+        ):
+            feedback_counts = all_feedback.get(norm_desc, {})
+            vector_scores = {hit.sku: hit.score for hit in vector_hits}
 
-        best_idx = int(np.argmax(combined))
-        best_item = erp_items[best_idx]
+            candidates = []
+            for sku, v_score in vector_scores.items():
+                item = by_sku.get(sku)
+                if not item:
+                    continue
+                f_score = fuzzy_match(norm_desc, [item])["score"]
+                final_score = (v_score * vector_weight) + (f_score * fuzzy_weight)
 
-        results.append({
-            "matched_item_code": best_item.item_code,
-            "matched_description": best_item.description,
-            "confidence_score": round(combined[best_idx], 4),
-            "fuzzy_score": round(fuzzy_scores[best_idx], 4),
-            "vector_score": round(vector_sims[best_idx], 4),
+                if size and item.size and item.size.lower().replace(" ", "") == size.lower().replace(" ", ""):
+                    final_score += 0.08
+                if length and item.length and str(item.length) == str(length):
+                    final_score += 0.08
+
+                candidates.append({
+                    "sku": item.sku,
+                    "description": item.description,
+                    "confidence_score": round(min(final_score, 1.0), 4),
+                    "fuzzy_score": round(f_score, 4),
+                    "vector_score": round(v_score, 4),
+                    "size": item.size,
+                    "length": item.length,
+                })
+
+            # If vector search returned nothing (broken/empty index), fall back to
+            # pure fuzzy matching across the full catalog so users still get results.
+            if not candidates:
+                _log.warning(
+                    "vector_index_miss: no vector hits for %r — falling back to fuzzy-only matching",
+                    norm_desc,
+                )
+                candidates = _fuzzy_only_candidates(norm_desc, erp_items, size, length, k=k)
+
+            candidates.sort(key=lambda x: x["confidence_score"], reverse=True)
+            candidates = _apply_feedback_rerank(candidates, feedback_counts)
+            candidates = candidates[:k]
+
+            if candidates:
+                top = candidates[0]
+                results[orig_idx] = {
+                    "matched_item_code": top["sku"],
+                    "matched_description": top["description"],
+                    "confidence_score": top["confidence_score"],
+                    "fuzzy_score": top["fuzzy_score"],
+                    "vector_score": top["vector_score"],
+                    "candidates": candidates,
+                }
+            else:
+                results[orig_idx] = _no_match()
+
+            # Yield CPU briefly between items so the web worker stays responsive
+            time.sleep(0)
+    else:
+        for orig_idx, *_ in needs_vector:
+            results[orig_idx] = _no_match()
+
+    return [results[i] for i in range(len(descriptions))]
+
+
+def _fuzzy_only_candidates(norm_desc: str, erp_items: list, size, length, k: int = 5) -> list[dict]:
+    """Pure fuzzy match across all catalog items — used when the vector index is unavailable."""
+    from app.services.fuzzy_matcher import fuzzy_match as _fmatch
+    scored = []
+    for item in erp_items:
+        f_score = _fmatch(norm_desc, [item])["score"]
+        final_score = f_score
+        if size and item.size and item.size.lower().replace(" ", "") == size.lower().replace(" ", ""):
+            final_score += 0.08
+        if length and item.length and str(item.length) == str(length):
+            final_score += 0.08
+        scored.append({
+            "sku": item.sku,
+            "description": item.description,
+            "confidence_score": round(min(final_score, 1.0), 4),
+            "fuzzy_score": round(f_score, 4),
+            "vector_score": 0.0,
+            "size": item.size,
+            "length": item.length,
         })
+    scored.sort(key=lambda x: x["confidence_score"], reverse=True)
+    return scored[:k]
 
-    return results
 
-
-def _no_match() -> MatchResult:
+def _no_match():
     return {
         "matched_item_code": None,
         "matched_description": None,
         "confidence_score": 0.0,
         "fuzzy_score": 0.0,
         "vector_score": 0.0,
+        "candidates": [],
     }

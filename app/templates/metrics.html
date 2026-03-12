@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+{% block title %}Ingester Metrics{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Ingester Metrics</h1>
+  <p class="subtitle">Pipeline performance and matching accuracy over the last
+    <strong>{{ days }}</strong> days.
+    &nbsp;|&nbsp;
+    <a href="{{ url_for('main.metrics_dashboard', days=7) }}">7 d</a> &nbsp;
+    <a href="{{ url_for('main.metrics_dashboard', days=30) }}">30 d</a> &nbsp;
+    <a href="{{ url_for('main.metrics_dashboard', days=90) }}">90 d</a>
+  </p>
+</div>
+
+{# ── Summary cards ─────────────────────────────────────────────────────── #}
+<div class="metrics-grid">
+
+  <div class="metric-card">
+    <div class="metric-value">{{ summary.total_sessions }}</div>
+    <div class="metric-label">Sessions</div>
+  </div>
+
+  <div class="metric-card">
+    <div class="metric-value">{{ summary.total_items_processed }}</div>
+    <div class="metric-label">Items Processed</div>
+  </div>
+
+  <div class="metric-card {% if summary.accuracy.accuracy_rate is not none and summary.accuracy.accuracy_rate < 0.8 %}metric-card--warn{% endif %}">
+    <div class="metric-value">
+      {% if summary.accuracy.accuracy_rate is not none %}
+        {{ "%.1f"|format(summary.accuracy.accuracy_rate * 100) }}%
+      {% else %}
+        —
+      {% endif %}
+    </div>
+    <div class="metric-label">Match Accuracy</div>
+    <div class="metric-sub">{{ summary.accuracy.corrected }} corrections / {{ summary.accuracy.total_reviewed_items }} reviewed</div>
+  </div>
+
+  <div class="metric-card">
+    <div class="metric-value">
+      {% if summary.latency_ms.total_avg is not none %}
+        {{ summary.latency_ms.total_avg / 1000 | round(1) }}s
+      {% else %}—{% endif %}
+    </div>
+    <div class="metric-label">Avg Total Time</div>
+    <div class="metric-sub">
+      OCR {{ summary.latency_ms.ocr_avg or "—" }}ms &middot;
+      AI {{ summary.latency_ms.ai_parse_avg or "—" }}ms &middot;
+      Match {{ summary.latency_ms.match_avg or "—" }}ms
+    </div>
+  </div>
+
+  <div class="metric-card">
+    <div class="metric-value">
+      {% if summary.confidence.avg is not none %}
+        {{ "%.2f"|format(summary.confidence.avg) }}
+      {% else %}—{% endif %}
+    </div>
+    <div class="metric-label">Avg Confidence</div>
+    <div class="metric-sub">
+      {% if summary.confidence.below_threshold_pct is not none %}
+        {{ summary.confidence.below_threshold_pct }}% below threshold
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="metric-card {% if (summary.pipeline_errors.ocr + summary.pipeline_errors.ai_parse + summary.pipeline_errors.match) > 0 %}metric-card--warn{% endif %}">
+    <div class="metric-value">
+      {{ summary.pipeline_errors.ocr + summary.pipeline_errors.ai_parse + summary.pipeline_errors.match }}
+    </div>
+    <div class="metric-label">Pipeline Errors</div>
+    <div class="metric-sub">
+      OCR {{ summary.pipeline_errors.ocr }} &middot;
+      AI {{ summary.pipeline_errors.ai_parse }} &middot;
+      Match {{ summary.pipeline_errors.match }}
+    </div>
+  </div>
+
+</div>
+
+{# ── Confidence distribution + Provider breakdown ──────────────────────── #}
+<div class="metrics-row">
+
+  <div class="card metrics-half">
+    <h2 class="section-title">Confidence Distribution</h2>
+    <table class="data-table">
+      <thead>
+        <tr><th>Score Range</th><th>Items</th><th>Bar</th></tr>
+      </thead>
+      <tbody>
+        {% set max_count = conf_dist.values() | max if conf_dist.values() | list | length else 1 %}
+        {% for bucket, count in conf_dist.items() %}
+        <tr>
+          <td>{{ bucket }}</td>
+          <td>{{ count }}</td>
+          <td>
+            <div class="mini-bar" style="width: {{ [((count / max_count) * 160) | int, 2] | max }}px;
+              background: {% if '0.0' in bucket %}#e74c3c{% elif '0.3' in bucket %}#e67e22{% elif '0.5' in bucket %}#f1c40f{% else %}#2ecc71{% endif %}">
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card metrics-half">
+    <h2 class="section-title">AI Provider Comparison</h2>
+    {% if provider_stats %}
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Provider</th><th>Sessions</th><th>Items</th>
+          <th>AI Parse (ms)</th><th>Avg Conf.</th><th>Correction Rate</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for prov, stats in provider_stats.items() %}
+        <tr>
+          <td>{{ prov }}</td>
+          <td>{{ stats.sessions }}</td>
+          <td>{{ stats.total_items }}</td>
+          <td>{{ stats.avg_ai_parse_ms or "—" }}</td>
+          <td>{{ "%.2f"|format(stats.avg_confidence) if stats.avg_confidence is not none else "—" }}</td>
+          <td>
+            {% if stats.correction_rate is not none %}
+              {{ "%.1f"|format(stats.correction_rate * 100) }}%
+            {% else %}—{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="empty-state">No provider data yet.</p>
+    {% endif %}
+  </div>
+
+</div>
+
+{# ── Recent sessions table ─────────────────────────────────────────────── #}
+<div class="card">
+  <h2 class="section-title">Recent Sessions</h2>
+  {% if recent_sessions %}
+  <div class="table-scroll">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>File</th>
+        <th>Provider</th>
+        <th>Status</th>
+        <th>OCR (ms)</th>
+        <th>AI (ms)</th>
+        <th>Match (ms)</th>
+        <th>Total (ms)</th>
+        <th>Items</th>
+        <th>Below&nbsp;Thresh</th>
+        <th>Avg&nbsp;Conf</th>
+        <th>Corrections</th>
+        <th>Errors</th>
+        <th>Date</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in recent_sessions %}
+      <tr>
+        <td><a href="{{ url_for('main.review', session_id=s.session_id) }}">{{ s.session_id }}</a></td>
+        <td class="td-filename" title="{{ s.filename }}">{{ s.filename | truncate(28, true) }}</td>
+        <td>{{ s.ai_provider }}</td>
+        <td><span class="badge badge-{{ s.status }}">{{ s.status }}</span></td>
+        <td>{{ s.ocr_duration_ms or "—" }}</td>
+        <td>{{ s.ai_parse_duration_ms or "—" }}</td>
+        <td>{{ s.match_duration_ms or "—" }}</td>
+        <td>{{ s.total_duration_ms or "—" }}</td>
+        <td>{{ s.items_extracted }}</td>
+        <td>{{ s.items_below_threshold }}</td>
+        <td>{{ "%.2f"|format(s.avg_confidence) if s.avg_confidence is not none else "—" }}</td>
+        <td>
+          {% if s.feedback %}
+            {% if s.feedback.total %}
+              {{ s.feedback.corrected }} / {{ s.feedback.total }}
+              ({{ "%.0f"|format(s.feedback.correction_rate * 100 if s.feedback.correction_rate is not none else 0) }}%)
+            {% else %}—{% endif %}
+          {% else %}—{% endif %}
+        </td>
+        <td>
+          {% if s.ocr_error %}<span class="badge badge-error" title="OCR error">OCR</span>{% endif %}
+          {% if s.ai_parse_error %}<span class="badge badge-error" title="AI parse error">AI</span>{% endif %}
+          {% if s.match_error %}<span class="badge badge-error" title="Match error">Match</span>{% endif %}
+          {% if not s.ocr_error and not s.ai_parse_error and not s.match_error %}—{% endif %}
+        </td>
+        <td class="td-date">{{ s.created_at[:10] }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="empty-state">No sessions recorded yet. Process a material list to start collecting metrics.</p>
+  {% endif %}
+</div>
+
+{# ── Machine-readable hint ─────────────────────────────────────────────── #}
+<div class="card" style="margin-top:1rem; background:#f8f9fa;">
+  <p style="margin:0; font-size:0.85rem; color:#666;">
+    JSON endpoint for agents &amp; monitoring:
+    <code><a href="{{ url_for('main.api_metrics') }}">GET /api/metrics</a></code>
+    &nbsp;&mdash;&nbsp;
+    <code><a href="{{ url_for('main.api_metrics', days=days, sessions=100) }}">GET /api/metrics?days={{ days }}&amp;sessions=100</a></code>
+  </p>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<style>
+  /* ── Metrics-specific layout ── */
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .metric-card {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  }
+  .metric-card--warn {
+    border-color: #e67e22;
+    background: #fff8f2;
+  }
+  .metric-value {
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1.1;
+    color: #2c3e50;
+  }
+  .metric-label {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: #888;
+    margin-top: .2rem;
+  }
+  .metric-sub {
+    font-size: 0.75rem;
+    color: #aaa;
+    margin-top: .3rem;
+  }
+
+  /* ── Side-by-side panels ── */
+  .metrics-row {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+  }
+  .metrics-half {
+    flex: 1 1 300px;
+  }
+
+  /* ── Mini bar chart ── */
+  .mini-bar {
+    height: 14px;
+    border-radius: 3px;
+    display: inline-block;
+    vertical-align: middle;
+    min-width: 2px;
+  }
+
+  /* ── Table helpers ── */
+  .table-scroll { overflow-x: auto; }
+  .td-filename { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .td-date { white-space: nowrap; color: #888; font-size: .85rem; }
+
+  .badge-error { background: #e74c3c; color: #fff; }
+</style>
+{% endblock %}
