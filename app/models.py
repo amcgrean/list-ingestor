@@ -84,6 +84,25 @@ class ItemAlias(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
 
+class MatchFeedbackEvent(db.Model):
+    """Historical user feedback captured during review to improve matching."""
+    __tablename__ = "match_feedback_events"
+
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.Integer, db.ForeignKey("processing_sessions.id"), nullable=False, index=True)
+    extracted_item_id = db.Column(db.Integer, db.ForeignKey("extracted_items.id"), nullable=False, index=True)
+    raw_description = db.Column(db.String(500), nullable=False)
+    normalized_description = db.Column(db.String(255), nullable=False, index=True)
+    predicted_sku = db.Column(db.String(100), nullable=True, index=True)
+    final_sku = db.Column(db.String(100), nullable=True, index=True)
+    was_corrected = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    was_skipped = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    confidence_score = db.Column(db.Float, default=0.0, nullable=False)
+    fuzzy_score = db.Column(db.Float, default=0.0, nullable=False)
+    vector_score = db.Column(db.Float, default=0.0, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+
 class ProcessingSession(db.Model):
     """Tracks one upload-and-process job."""
     __tablename__ = "processing_sessions"
