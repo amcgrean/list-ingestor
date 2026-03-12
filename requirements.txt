@@ -10,6 +10,7 @@ psycopg2-binary==2.9.10      # PostgreSQL (production)
 pytesseract==0.3.13
 pillow==11.1.0
 pdf2image==1.17.0             # requires poppler (see setup notes)
+opencv-python-headless==4.11.0.86  # preprocessing: equalisation, morphology, adaptive threshold
 
 # AI / LLM
 anthropic==0.49.0
