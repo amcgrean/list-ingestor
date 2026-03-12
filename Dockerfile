@@ -37,4 +37,9 @@ EXPOSE 8000
 # Single worker — the sentence-transformers model + FAISS index are kept in
 # process memory; multiple workers would each load their own copy and quickly
 # exhaust RAM even on the Standard 2 GB plan.
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "1", "--timeout", "300", "--worker-tmp-dir", "/dev/shm", "run:app"]
+# 1 worker process keeps the sentence-transformers model + FAISS index in a
+# single memory space (no duplication).  gthread gives us 4 threads within
+# that process so health-check and other lightweight requests are never
+# blocked by a long-running OCR upload.  Tesseract and PIL release Python's
+# GIL during their CPU work, so real concurrency happens on those threads.
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "1", "--worker-class", "gthread", "--threads", "4", "--timeout", "300", "--worker-tmp-dir", "/dev/shm", "run:app"]

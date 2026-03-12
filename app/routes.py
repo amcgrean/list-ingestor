@@ -700,10 +700,13 @@ def health():
     except Exception:
         db_ok = False
 
-    catalog_count = 0
+    # Use a fast existence check rather than COUNT(*) over the full table —
+    # this endpoint is polled every 15 s and must complete well within the
+    # 5 s health-check timeout even under concurrent load.
+    has_catalog = False
     if db_ok:
         try:
-            catalog_count = ERPItem.query.count()
+            has_catalog = ERPItem.query.with_entities(ERPItem.id).limit(1).first() is not None
         except Exception:
             pass
 
@@ -711,7 +714,7 @@ def health():
     return jsonify({
         "status": status,
         "db": db_ok,
-        "catalog_items": catalog_count,
+        "catalog_loaded": has_catalog,
         "anthropic_key_set": bool(current_app.config.get("ANTHROPIC_API_KEY")),
         "openai_key_set": bool(current_app.config.get("OPENAI_API_KEY")),
         "default_ai_provider": current_app.config.get("DEFAULT_AI_PROVIDER", "claude"),
