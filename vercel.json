@@ -1,23 +1,10 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "api/parse_list.py",
-      "use": "@vercel/python"
-    }
+  "rewrites": [
+    { "source": "/api/parse-list", "destination": "/api/parse_list" }
   ],
-  "routes": [
-    {
-      "src": "/api/parse-list",
-      "dest": "api/parse_list.py"
-    }
-  ],
-  "env": {
-    "OPENAI_API_KEY": "@openai_api_key",
-    "DATABASE_URL": "@database_url"
-  },
   "functions": {
     "api/parse_list.py": {
+      "runtime": "python3.12",
       "maxDuration": 10,
       "memory": 256
     }

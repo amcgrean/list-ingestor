@@ -36,7 +36,8 @@ never stored permanently, satisfying the security requirement.
 
 from __future__ import annotations
 
-import cgi
+import email
+import email.policy
 import io
 import json
 import logging
@@ -103,25 +104,9 @@ class handler(BaseHTTPRequestHandler):
 
     def _handle_multipart(self, content_type: str, body: bytes) -> list[dict]:
         """Parse multipart upload, save to temp file, run pipeline, delete."""
-        environ = {
-            "REQUEST_METHOD": "POST",
-            "CONTENT_TYPE": content_type,
-            "CONTENT_LENGTH": str(len(body)),
-        }
-        form = cgi.FieldStorage(
-            fp=io.BytesIO(body),
-            environ=environ,
-            keep_blank_values=True,
-        )
-
-        file_item = form.getvalue("image")
-        if not file_item:
+        raw_bytes = _extract_multipart_field(content_type, body, field="image")
+        if raw_bytes is None:
             raise _HttpError(400, "No 'image' field in multipart body.")
-
-        # file_item may be bytes if keep_blank_values is set
-        raw_bytes: bytes = (
-            file_item if isinstance(file_item, bytes) else file_item.encode("latin-1")
-        )
         if len(raw_bytes) == 0:
             raise _HttpError(400, "Uploaded image is empty.")
 
@@ -167,6 +152,23 @@ class handler(BaseHTTPRequestHandler):
 # ---------------------------------------------------------------------------
 # Utilities
 # ---------------------------------------------------------------------------
+
+def _extract_multipart_field(content_type: str, body: bytes, field: str) -> bytes | None:
+    """Extract a single named field from a multipart/form-data body.
+
+    Uses only stdlib ``email`` — no ``cgi`` module required.
+    """
+    # email.message_from_bytes needs headers prepended to the body
+    raw = f"Content-Type: {content_type}\r\n\r\n".encode() + body
+    msg = email.message_from_bytes(raw, policy=email.policy.compat32)
+    for part in msg.walk():
+        disposition = part.get("Content-Disposition", "")
+        # Look for name="image" (or name=image without quotes)
+        if f'name="{field}"' in disposition or f"name={field}" in disposition:
+            payload = part.get_payload(decode=True)
+            return payload if isinstance(payload, bytes) else None
+    return None
+
 
 class _HttpError(Exception):
     def __init__(self, status: int, message: str) -> None:
