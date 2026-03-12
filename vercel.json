@@ -5,7 +5,8 @@
   "functions": {
     "api/parse_list.py": {
       "maxDuration": 10,
-      "memory": 256
+      "memory": 256,
+      "includeFiles": "services/**"
     }
   }
 }
