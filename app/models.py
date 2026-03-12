@@ -145,6 +145,7 @@ class ItemAlias(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     alias = db.Column(db.String(255), unique=True, nullable=False, index=True)
     sku = db.Column(db.String(100), nullable=False, index=True)
+    usage_count = db.Column(db.Integer, nullable=False, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
 

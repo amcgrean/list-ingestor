@@ -1,6 +1,13 @@
 """
-OCR Service
------------
+OCR Service  [DEPRECATED]
+-------------------------
+.. deprecated::
+   This module is no longer used.  Image reading is now handled by the
+   OpenAI Vision API via ``services/openai_vision.py``.
+
+   This file is retained for reference only and will be removed in a
+   future release.  Do not import it in new code.
+
 Extracts text from uploaded images and PDFs using pytesseract.
 
 Preprocessing pipeline (Pillow + numpy only — no OpenCV required):

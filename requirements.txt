@@ -3,29 +3,34 @@ flask==3.1.0
 flask-sqlalchemy==3.1.1
 
 # Database
-psycopg2-binary==2.9.10      # PostgreSQL (production)
-# sqlite3 ships with Python   # SQLite (local dev, no install needed)
-
-# OCR
-pytesseract==0.3.13
-pillow==11.1.0
-pdf2image==1.17.0             # requires poppler (see setup notes)
+psycopg[binary]==3.2.4          # Neon Postgres (serverless functions + Flask)
+psycopg2-binary==2.9.10         # SQLAlchemy PostgreSQL dialect (Flask app)
+# sqlite3 ships with Python     # SQLite (local dev, no install needed)
 
 # AI / LLM
-anthropic==0.49.0
-openai==1.75.0
+openai==1.75.0                  # Vision API + ChatGPT parsing
+anthropic==0.49.0               # Claude parsing (optional, kept for Flask app)
 
-# Matching
+# Matching (Flask app hybrid matcher)
 faiss-cpu==1.9.0.post1
 rapidfuzz==3.12.1
 sentence-transformers==3.4.1
 numpy==2.2.3
 
+# Image handling (Vision API pre-processing)
+pillow==11.1.0
+
 # Data handling / export
 pandas==2.2.3
-openpyxl==3.1.5               # Excel export
+openpyxl==3.1.5                 # Excel export
 
 # Utilities
 python-dotenv==1.0.1
+pydantic==2.11.1                # Data validation for structured responses
 werkzeug==3.1.3
-gunicorn==23.0.0              # production WSGI server
+gunicorn==23.0.0                # production WSGI server
+
+# Removed (no longer needed — OCR handled by OpenAI Vision):
+#   pytesseract
+#   pdf2image
+#   opencv-python

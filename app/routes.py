@@ -28,8 +28,14 @@ from werkzeug.utils import secure_filename
 
 from app import db
 from app.models import ERPItem, ExtractedItem, IngesterMetrics, ProcessingSession, ItemAlias, MatchFeedbackEvent
-from app.services import ocr_service, ai_parser, chatgpt_parser, item_matcher
+from app.services import item_matcher
 from app.services import metrics_service
+import sys, os as _os
+# Add project root so services/ package is importable from within the Flask app
+_PROJECT_ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+from services.openai_vision import extract_items_from_image as _vision_extract
 
 logger = logging.getLogger(__name__)
 main = Blueprint("main", __name__)
@@ -106,156 +112,74 @@ def upload():
     db.session.commit()
 
     t_start = time.perf_counter()
-    ocr_ms = ai_ms = match_ms = None
-    ocr_error = ai_parse_error = match_error = False
+    ai_ms = match_ms = None
+    ai_parse_error = match_error = False
+    provider = "openai"  # Vision API is always OpenAI
 
-    # --- Step 1: OCR ---
+    # --- Step 1: OpenAI Vision — extract structured items directly from image ---
+    api_key = current_app.config.get("OPENAI_API_KEY", "")
+    if not api_key:
+        session.status = "error"
+        session.error_message = "OPENAI_API_KEY is not configured."
+        db.session.commit()
+        flash("OpenAI Vision is not configured. Set OPENAI_API_KEY.", "error")
+        try:
+            os.unlink(file_path)
+        except OSError:
+            pass
+        return redirect(url_for("main.index"))
+
     t0 = time.perf_counter()
     try:
-        raw_text = ocr_service.extract_text(file_path)
-        ocr_ms = int((time.perf_counter() - t0) * 1000)
-        session.raw_ocr_text = raw_text
-        session.status = "ocr_complete"
+        parsed_items = _vision_extract(
+            file_path,
+            api_key=api_key,
+            model=current_app.config["OPENAI_MODEL"],
+        )
+        ai_ms = int((time.perf_counter() - t0) * 1000)
+        # Store a text representation of extracted items for the raw-text debug view
+        session.raw_ocr_text = "\n".join(
+            f"{item['quantity']} {item['description']}" for item in parsed_items
+        )
+        session.status = "parsed"
         db.session.commit()
-        logger.info("ocr_complete", extra={
-            "session_id": session.id, "stage": "ocr", "duration_ms": ocr_ms,
+        logger.info("vision_parse_complete", extra={
+            "session_id": session.id, "stage": "vision_parse",
+            "duration_ms": ai_ms, "items": len(parsed_items),
         })
     except Exception as exc:
-        ocr_ms = int((time.perf_counter() - t0) * 1000)
-        ocr_error = True
-        logger.exception("OCR failed for session %d", session.id, extra={
-            "session_id": session.id, "stage": "ocr", "duration_ms": ocr_ms,
+        ai_ms = int((time.perf_counter() - t0) * 1000)
+        ai_parse_error = True
+        logger.exception("Vision parsing failed for session %d", session.id, extra={
+            "session_id": session.id, "stage": "vision_parse", "duration_ms": ai_ms,
         })
         session.status = "error"
-        session.error_message = f"OCR failed: {exc}"
+        session.error_message = f"Vision parsing failed: {exc}"
         db.session.commit()
         metrics_service.save_session_metrics(
-            session_id=session.id, ai_provider="n/a",
-            ocr_ms=ocr_ms, ai_parse_ms=None, match_ms=None,
+            session_id=session.id, ai_provider=provider,
+            ocr_ms=None, ai_parse_ms=ai_ms, match_ms=None,
             total_ms=int((time.perf_counter() - t_start) * 1000),
             items_extracted=0, items_matched=0, items_below_threshold=0,
             avg_confidence=None, avg_fuzzy_score=None, avg_vector_score=None,
-            ocr_error=True,
+            ai_parse_error=True,
         )
-        flash(f"Could not read the file: {exc}", "error")
+        flash(f"Could not read the image: {exc}", "error")
         return redirect(url_for("main.index"))
     finally:
+        # Image is never stored permanently
         try:
             os.unlink(file_path)
         except OSError:
             pass
 
-    if not raw_text.strip():
-        session.status = "error"
-        session.error_message = "OCR produced no text. The image may be unreadable."
-        db.session.commit()
-        metrics_service.save_session_metrics(
-            session_id=session.id, ai_provider="n/a",
-            ocr_ms=ocr_ms, ai_parse_ms=None, match_ms=None,
-            total_ms=int((time.perf_counter() - t_start) * 1000),
-            items_extracted=0, items_matched=0, items_below_threshold=0,
-            avg_confidence=None, avg_fuzzy_score=None, avg_vector_score=None,
-            ocr_error=True,
-        )
-        flash("The file appears blank or unreadable. Try a clearer image.", "error")
-        return redirect(url_for("main.index"))
-
-    # --- Step 2: AI parse ---
-    provider = request.form.get("ai_provider", "").strip().lower()
-    if provider not in ("claude", "openai"):
-        provider = current_app.config.get("DEFAULT_AI_PROVIDER", "claude")
-
-    t0 = time.perf_counter()
-    if provider == "openai":
-        api_key = current_app.config.get("OPENAI_API_KEY", "")
-        if not api_key:
-            session.status = "error"
-            session.error_message = "OPENAI_API_KEY is not configured."
-            db.session.commit()
-            flash("ChatGPT parsing is not configured. Set OPENAI_API_KEY.", "error")
-            return redirect(url_for("main.index"))
-        try:
-            parsed_items = chatgpt_parser.parse_material_list(
-                raw_text,
-                api_key=api_key,
-                model=current_app.config["OPENAI_MODEL"],
-            )
-            ai_ms = int((time.perf_counter() - t0) * 1000)
-            session.status = "parsed"
-            db.session.commit()
-            logger.info("ai_parse_complete", extra={
-                "session_id": session.id, "stage": "ai_parse",
-                "duration_ms": ai_ms, "ai_provider": provider,
-                "items": len(parsed_items),
-            })
-        except Exception as exc:
-            ai_ms = int((time.perf_counter() - t0) * 1000)
-            ai_parse_error = True
-            logger.exception("ChatGPT parsing failed for session %d", session.id, extra={
-                "session_id": session.id, "stage": "ai_parse", "duration_ms": ai_ms,
-            })
-            session.status = "error"
-            session.error_message = f"ChatGPT parsing failed: {exc}"
-            db.session.commit()
-            metrics_service.save_session_metrics(
-                session_id=session.id, ai_provider=provider,
-                ocr_ms=ocr_ms, ai_parse_ms=ai_ms, match_ms=None,
-                total_ms=int((time.perf_counter() - t_start) * 1000),
-                items_extracted=0, items_matched=0, items_below_threshold=0,
-                avg_confidence=None, avg_fuzzy_score=None, avg_vector_score=None,
-                ai_parse_error=True,
-            )
-            flash(f"ChatGPT parsing failed: {exc}", "error")
-            return redirect(url_for("main.index"))
-    else:
-        api_key = current_app.config.get("ANTHROPIC_API_KEY", "")
-        if not api_key:
-            session.status = "error"
-            session.error_message = "ANTHROPIC_API_KEY is not configured."
-            db.session.commit()
-            flash("AI parsing is not configured. Set ANTHROPIC_API_KEY.", "error")
-            return redirect(url_for("main.index"))
-        try:
-            parsed_items = ai_parser.parse_material_list(
-                raw_text,
-                api_key=api_key,
-                model=current_app.config["CLAUDE_MODEL"],
-            )
-            ai_ms = int((time.perf_counter() - t0) * 1000)
-            session.status = "parsed"
-            db.session.commit()
-            logger.info("ai_parse_complete", extra={
-                "session_id": session.id, "stage": "ai_parse",
-                "duration_ms": ai_ms, "ai_provider": provider,
-                "items": len(parsed_items),
-            })
-        except Exception as exc:
-            ai_ms = int((time.perf_counter() - t0) * 1000)
-            ai_parse_error = True
-            logger.exception("Claude parsing failed for session %d", session.id, extra={
-                "session_id": session.id, "stage": "ai_parse", "duration_ms": ai_ms,
-            })
-            session.status = "error"
-            session.error_message = f"AI parsing failed: {exc}"
-            db.session.commit()
-            metrics_service.save_session_metrics(
-                session_id=session.id, ai_provider=provider,
-                ocr_ms=ocr_ms, ai_parse_ms=ai_ms, match_ms=None,
-                total_ms=int((time.perf_counter() - t_start) * 1000),
-                items_extracted=0, items_matched=0, items_below_threshold=0,
-                avg_confidence=None, avg_fuzzy_score=None, avg_vector_score=None,
-                ai_parse_error=True,
-            )
-            flash(f"AI parsing failed: {exc}", "error")
-            return redirect(url_for("main.index"))
-
     if not parsed_items:
         session.status = "error"
-        session.error_message = "AI returned no items from the material list."
+        session.error_message = "Vision API returned no items from the material list."
         db.session.commit()
         metrics_service.save_session_metrics(
             session_id=session.id, ai_provider=provider,
-            ocr_ms=ocr_ms, ai_parse_ms=ai_ms, match_ms=None,
+            ocr_ms=None, ai_parse_ms=ai_ms, match_ms=None,
             total_ms=int((time.perf_counter() - t_start) * 1000),
             items_extracted=0, items_matched=0, items_below_threshold=0,
             avg_confidence=None, avg_fuzzy_score=None, avg_vector_score=None,
@@ -324,7 +248,7 @@ def upload():
     metrics_service.save_session_metrics(
         session_id=session.id,
         ai_provider=provider,
-        ocr_ms=ocr_ms,
+        ocr_ms=None,
         ai_parse_ms=ai_ms,
         match_ms=match_ms,
         total_ms=total_ms,
@@ -396,8 +320,9 @@ def save_review(session_id):
             alias = ItemAlias.query.filter_by(alias=alias_key).first()
             if alias:
                 alias.sku = new_effective_code
+                alias.usage_count = (alias.usage_count or 0) + 1
             else:
-                db.session.add(ItemAlias(alias=alias_key, sku=new_effective_code))
+                db.session.add(ItemAlias(alias=alias_key, sku=new_effective_code, usage_count=1))
 
         db.session.add(MatchFeedbackEvent(
             session_id=session_id,
