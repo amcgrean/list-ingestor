@@ -45,6 +45,19 @@ def _alias_lookup(description: str):
     return ItemAlias.query.filter_by(alias=normalized).first()
 
 
+def _alias_lookup_batch(descriptions: list[str]) -> dict[str, str]:
+    """Return {normalized_description: sku} for all descriptions in one query."""
+    normalized = [normalise_description(d) for d in descriptions]
+    unique = list(set(normalized))
+    if not unique:
+        return {}
+    try:
+        rows = ItemAlias.query.filter(ItemAlias.alias.in_(unique)).all()
+    except RuntimeError:
+        return {}
+    return {row.alias: row.sku for row in rows}
+
+
 def _catalog_by_sku(erp_items):
     return {item.sku: item for item in erp_items}
 
@@ -71,6 +84,36 @@ def _feedback_counts(normalized_description: str) -> dict[str, int]:
         return {}
 
     return {sku: int(count) for sku, count in rows if sku}
+
+
+def _feedback_counts_batch(normalized_descriptions: list[str]) -> dict[str, dict[str, int]]:
+    """Return {normalized_description: {sku: count}} for all descriptions in one query."""
+    unique = list(set(d for d in normalized_descriptions if d))
+    if not unique:
+        return {}
+    try:
+        rows = (
+            MatchFeedbackEvent.query.with_entities(
+                MatchFeedbackEvent.normalized_description,
+                MatchFeedbackEvent.final_sku,
+                func.count(MatchFeedbackEvent.id),
+            )
+            .filter(
+                MatchFeedbackEvent.normalized_description.in_(unique),
+                MatchFeedbackEvent.final_sku.isnot(None),
+                MatchFeedbackEvent.was_skipped.is_(False),
+            )
+            .group_by(MatchFeedbackEvent.normalized_description, MatchFeedbackEvent.final_sku)
+            .all()
+        )
+    except RuntimeError:
+        return {}
+
+    result: dict[str, dict[str, int]] = {}
+    for norm_desc, sku, count in rows:
+        if norm_desc and sku:
+            result.setdefault(norm_desc, {})[sku] = int(count)
+    return result
 
 
 def _apply_feedback_rerank(candidates: list[dict], feedback_counts: dict[str, int]) -> list[dict]:
@@ -199,21 +242,28 @@ def match_items_batch(
     Encodes all query descriptions in a single transformer forward pass
     (via search_batch) instead of N separate encode calls, which
     significantly reduces CPU load on single-core hosts like Render.
+
+    Uses two bulk DB queries (one for aliases, one for feedback history)
+    regardless of batch size, replacing the previous O(n) per-item queries.
     """
     if not descriptions:
         return []
 
     by_sku = _catalog_by_sku(erp_items)
 
+    # --- Single bulk alias lookup for all descriptions ---
+    alias_map = _alias_lookup_batch(descriptions)  # {norm_desc: sku}
+
     # Separate alias-resolved items from those that need vector search
-    alias_results: dict[int, dict] = {}
-    needs_vector: list[tuple[int, str, str, tuple, dict]] = []  # (idx, description, norm_desc, size_length, feedback)
+    results: dict[int, dict] = {}
+    needs_vector: list[tuple[int, str, str, tuple]] = []  # (idx, description, norm_desc, size_length)
 
     for i, description in enumerate(descriptions):
-        alias = _alias_lookup(description)
-        if alias and alias.sku in by_sku:
-            item = by_sku[alias.sku]
-            alias_results[i] = {
+        norm_desc = normalise_description(description)
+        resolved_sku = alias_map.get(norm_desc)
+        if resolved_sku and resolved_sku in by_sku:
+            item = by_sku[resolved_sku]
+            results[i] = {
                 "matched_item_code": item.sku,
                 "matched_description": item.description,
                 "confidence_score": 1.0,
@@ -230,21 +280,24 @@ def match_items_batch(
                 }],
             }
         else:
-            norm_desc = normalise_description(description)
             size_length = parse_size_and_length(norm_desc)
-            feedback = _feedback_counts(norm_desc)
-            needs_vector.append((i, description, norm_desc, size_length, feedback))
+            needs_vector.append((i, description, norm_desc, size_length))
+
+    # --- Single bulk feedback query for all remaining descriptions ---
+    norm_descs_needing_feedback = [norm_desc for _, _, norm_desc, _ in needs_vector]
+    all_feedback = _feedback_counts_batch(norm_descs_needing_feedback)
 
     # Batch-encode all remaining queries in one transformer call
     if needs_vector and erp_items:
         idx = _ensure_vector_index(erp_items, model_name)
         k = 5
-        norm_queries = [norm_desc for _, _, norm_desc, _, _ in needs_vector]
+        norm_queries = [norm_desc for _, _, norm_desc, _ in needs_vector]
         batch_hits = idx.search_batch(norm_queries, k=max(k * 2, 10))
 
-        for (orig_idx, description, norm_desc, (size, length), feedback_counts), vector_hits in zip(
+        for (orig_idx, description, norm_desc, (size, length)), vector_hits in zip(
             needs_vector, batch_hits
         ):
+            feedback_counts = all_feedback.get(norm_desc, {})
             vector_scores = {hit.sku: hit.score for hit in vector_hits}
 
             candidates = []
@@ -276,7 +329,7 @@ def match_items_batch(
 
             if candidates:
                 top = candidates[0]
-                alias_results[orig_idx] = {
+                results[orig_idx] = {
                     "matched_item_code": top["sku"],
                     "matched_description": top["description"],
                     "confidence_score": top["confidence_score"],
@@ -285,15 +338,15 @@ def match_items_batch(
                     "candidates": candidates,
                 }
             else:
-                alias_results[orig_idx] = _no_match()
+                results[orig_idx] = _no_match()
 
             # Yield CPU briefly between items so the web worker stays responsive
             time.sleep(0)
     else:
         for orig_idx, *_ in needs_vector:
-            alias_results[orig_idx] = _no_match()
+            results[orig_idx] = _no_match()
 
-    return [alias_results[i] for i in range(len(descriptions))]
+    return [results[i] for i in range(len(descriptions))]
 
 
 def _no_match():
