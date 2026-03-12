@@ -10,7 +10,7 @@ out of this module — so results are safe to JSON-serialize directly.
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from sqlalchemy import func, case
 
@@ -39,8 +39,6 @@ def save_session_metrics(
     match_error: bool = False,
 ) -> None:
     """Upsert an IngesterMetrics row for the given session."""
-    from app.models import IngesterMetrics  # avoid circular at module level
-
     existing = IngesterMetrics.query.filter_by(session_id=session_id).first()
     if existing:
         row = existing
@@ -211,31 +209,35 @@ def get_recent_sessions(limit: int = 25) -> list[dict]:
 
 
 def get_confidence_distribution(days: int = 30) -> dict:
-    """Return counts of MatchFeedbackEvent rows bucketed by confidence score."""
-    since = datetime.utcnow() - timedelta(days=days)
+    """Return counts of MatchFeedbackEvent rows bucketed by confidence score.
 
-    buckets = {
-        "0.0–0.3": (0.0, 0.3),
-        "0.3–0.5": (0.3, 0.5),
-        "0.5–0.7": (0.5, 0.7),
-        "0.7–0.9": (0.7, 0.9),
-        "0.9–1.0": (0.9, 1.01),
+    Single aggregation query — no Python-side loop of COUNT queries.
+    """
+    since = datetime.utcnow() - timedelta(days=days)
+    cs = MatchFeedbackEvent.confidence_score
+    row = db.session.query(
+        func.sum(case((cs < 0.3, 1), else_=0)).label("b0"),
+        func.sum(case((db.and_(cs >= 0.3, cs < 0.5), 1), else_=0)).label("b1"),
+        func.sum(case((db.and_(cs >= 0.5, cs < 0.7), 1), else_=0)).label("b2"),
+        func.sum(case((db.and_(cs >= 0.7, cs < 0.9), 1), else_=0)).label("b3"),
+        func.sum(case((cs >= 0.9, 1), else_=0)).label("b4"),
+    ).filter(MatchFeedbackEvent.created_at >= since).one()
+    return {
+        "0.0–0.3": int(row.b0 or 0),
+        "0.3–0.5": int(row.b1 or 0),
+        "0.5–0.7": int(row.b2 or 0),
+        "0.7–0.9": int(row.b3 or 0),
+        "0.9–1.0": int(row.b4 or 0),
     }
-    result = {}
-    for label, (lo, hi) in buckets.items():
-        count = MatchFeedbackEvent.query.filter(
-            MatchFeedbackEvent.created_at >= since,
-            MatchFeedbackEvent.confidence_score >= lo,
-            MatchFeedbackEvent.confidence_score < hi,
-        ).count()
-        result[label] = count
-    return result
 
 
 def get_provider_stats(days: int = 30) -> dict:
-    """Per-AI-provider breakdown of latency, volume, and accuracy."""
-    since = datetime.utcnow() - timedelta(days=days)
+    """Per-AI-provider breakdown of latency, volume, and accuracy.
 
+    Single query using an outer join — no N+1 per-provider queries and no
+    intermediate Python-side list of all session IDs.
+    """
+    since = datetime.utcnow() - timedelta(days=days)
     rows = (
         db.session.query(
             IngesterMetrics.ai_provider,
@@ -244,48 +246,32 @@ def get_provider_stats(days: int = 30) -> dict:
             func.avg(IngesterMetrics.total_duration_ms).label("avg_total_ms"),
             func.avg(IngesterMetrics.avg_confidence).label("avg_confidence"),
             func.sum(IngesterMetrics.items_extracted).label("total_items"),
+            func.count(MatchFeedbackEvent.id).label("fb_total"),
+            func.sum(case((MatchFeedbackEvent.was_corrected.is_(True), 1), else_=0)).label("fb_corrected"),
+        )
+        .outerjoin(
+            MatchFeedbackEvent,
+            db.and_(
+                MatchFeedbackEvent.session_id == IngesterMetrics.session_id,
+                MatchFeedbackEvent.created_at >= since,
+            ),
         )
         .filter(IngesterMetrics.created_at >= since)
         .group_by(IngesterMetrics.ai_provider)
         .all()
     )
-
-    # Correction rates per provider require joining through session
-    provider_sessions: dict[str, list[int]] = {}
-    all_metrics = (
-        IngesterMetrics.query
-        .filter(IngesterMetrics.created_at >= since)
-        .with_entities(IngesterMetrics.session_id, IngesterMetrics.ai_provider)
-        .all()
-    )
-    for sid, prov in all_metrics:
-        provider_sessions.setdefault(prov, []).append(sid)
-
-    correction_by_provider: dict[str, dict] = {}
-    for prov, sids in provider_sessions.items():
-        fb = db.session.query(
-            func.count(MatchFeedbackEvent.id).label("total"),
-            func.sum(case((MatchFeedbackEvent.was_corrected.is_(True), 1), else_=0)).label("corrected"),
-        ).filter(
-            MatchFeedbackEvent.session_id.in_(sids),
-            MatchFeedbackEvent.created_at >= since,
-        ).one()
-        total = int(fb.total or 0)
-        corr = int(fb.corrected or 0)
-        correction_by_provider[prov] = {
-            "correction_rate": round(corr / total, 3) if total else None,
-        }
-
     result = {}
     for row in rows:
         prov = row.ai_provider or "unknown"
+        fb_total = int(row.fb_total or 0)
+        fb_corr = int(row.fb_corrected or 0)
         result[prov] = {
             "sessions": int(row.sessions),
             "total_items": int(row.total_items or 0),
             "avg_ai_parse_ms": _ms(row.avg_ai_ms),
             "avg_total_ms": _ms(row.avg_total_ms),
             "avg_confidence": round(float(row.avg_confidence), 3) if row.avg_confidence else None,
-            "correction_rate": correction_by_provider.get(prov, {}).get("correction_rate"),
+            "correction_rate": round(fb_corr / fb_total, 3) if fb_total else None,
         }
     return result
 
