@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import time
 from typing import Iterable
 
 from sqlalchemy import func
@@ -193,17 +194,106 @@ def match_items_batch(
     fuzzy_weight: float = 0.4,
     vector_weight: float = 0.6,
 ):
-    matches = []
-    for description in descriptions:
-        result = match_item(
-            description,
-            erp_items,
-            model_name=model_name,
-            fuzzy_weight=fuzzy_weight,
-            vector_weight=vector_weight,
-        )
-        matches.append(result)
-    return matches
+    """Match a batch of descriptions against the catalog.
+
+    Encodes all query descriptions in a single transformer forward pass
+    (via search_batch) instead of N separate encode calls, which
+    significantly reduces CPU load on single-core hosts like Render.
+    """
+    if not descriptions:
+        return []
+
+    by_sku = _catalog_by_sku(erp_items)
+
+    # Separate alias-resolved items from those that need vector search
+    alias_results: dict[int, dict] = {}
+    needs_vector: list[tuple[int, str, str, tuple, dict]] = []  # (idx, description, norm_desc, size_length, feedback)
+
+    for i, description in enumerate(descriptions):
+        alias = _alias_lookup(description)
+        if alias and alias.sku in by_sku:
+            item = by_sku[alias.sku]
+            alias_results[i] = {
+                "matched_item_code": item.sku,
+                "matched_description": item.description,
+                "confidence_score": 1.0,
+                "fuzzy_score": 1.0,
+                "vector_score": 1.0,
+                "candidates": [{
+                    "sku": item.sku,
+                    "description": item.description,
+                    "confidence_score": 1.0,
+                    "fuzzy_score": 1.0,
+                    "vector_score": 1.0,
+                    "size": item.size,
+                    "length": item.length,
+                }],
+            }
+        else:
+            norm_desc = normalise_description(description)
+            size_length = parse_size_and_length(norm_desc)
+            feedback = _feedback_counts(norm_desc)
+            needs_vector.append((i, description, norm_desc, size_length, feedback))
+
+    # Batch-encode all remaining queries in one transformer call
+    if needs_vector and erp_items:
+        idx = _ensure_vector_index(erp_items, model_name)
+        k = 5
+        norm_queries = [norm_desc for _, _, norm_desc, _, _ in needs_vector]
+        batch_hits = idx.search_batch(norm_queries, k=max(k * 2, 10))
+
+        for (orig_idx, description, norm_desc, (size, length), feedback_counts), vector_hits in zip(
+            needs_vector, batch_hits
+        ):
+            vector_scores = {hit.sku: hit.score for hit in vector_hits}
+
+            candidates = []
+            for sku, v_score in vector_scores.items():
+                item = by_sku.get(sku)
+                if not item:
+                    continue
+                f_score = fuzzy_match(norm_desc, [item])["score"]
+                final_score = (v_score * vector_weight) + (f_score * fuzzy_weight)
+
+                if size and item.size and item.size.lower().replace(" ", "") == size.lower().replace(" ", ""):
+                    final_score += 0.08
+                if length and item.length and str(item.length) == str(length):
+                    final_score += 0.08
+
+                candidates.append({
+                    "sku": item.sku,
+                    "description": item.description,
+                    "confidence_score": round(min(final_score, 1.0), 4),
+                    "fuzzy_score": round(f_score, 4),
+                    "vector_score": round(v_score, 4),
+                    "size": item.size,
+                    "length": item.length,
+                })
+
+            candidates.sort(key=lambda x: x["confidence_score"], reverse=True)
+            candidates = _apply_feedback_rerank(candidates, feedback_counts)
+            candidates = candidates[:k]
+
+            if candidates:
+                top = candidates[0]
+                alias_results[orig_idx] = {
+                    "matched_item_code": top["sku"],
+                    "matched_description": top["description"],
+                    "confidence_score": top["confidence_score"],
+                    "fuzzy_score": top["fuzzy_score"],
+                    "vector_score": top["vector_score"],
+                    "candidates": candidates,
+                }
+            else:
+                alias_results[orig_idx] = _no_match()
+
+            # Yield CPU briefly between items so the web worker stays responsive
+            time.sleep(0)
+    else:
+        for orig_idx, *_ in needs_vector:
+            alias_results[orig_idx] = _no_match()
+
+    return [alias_results[i] for i in range(len(descriptions))]
 
 
 def _no_match():
