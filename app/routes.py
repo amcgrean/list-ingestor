@@ -59,6 +59,10 @@ def index():
     recent_sessions = (
         ProcessingSession.query.order_by(ProcessingSession.created_at.desc()).limit(10).all()
     )
+    # Get distinct branches
+    branches = [r[0] for r in db.session.query(ERPItem.branch_system_id).distinct().all() if r[0]]
+    branches.sort()
+    
     claude_available = bool(current_app.config.get("ANTHROPIC_API_KEY"))
     openai_available = bool(current_app.config.get("OPENAI_API_KEY"))
     default_provider = current_app.config.get("DEFAULT_AI_PROVIDER", "claude")
@@ -68,6 +72,7 @@ def index():
         claude_available=claude_available,
         openai_available=openai_available,
         default_provider=default_provider,
+        branches=branches,
     )
 
 
@@ -131,6 +136,7 @@ def upload():
         return redirect(url_for("main.index"))
 
     # --- Step 2: AI parse ---
+    branch_id = request.form.get("branch_system_id", "").strip()
     provider = request.form.get("ai_provider", "").strip().lower()
     if provider not in ("claude", "openai"):
         provider = current_app.config.get("DEFAULT_AI_PROVIDER", "claude")
@@ -201,6 +207,7 @@ def upload():
                 model_name=current_app.config["EMBEDDING_MODEL"],
                 fuzzy_weight=current_app.config["FUZZY_WEIGHT"],
                 vector_weight=current_app.config["VECTOR_WEIGHT"],
+                branch_system_id=branch_id,
             )
         except Exception as exc:
             logger.exception("Item matching failed for session %d", session.id)
@@ -407,8 +414,11 @@ def catalog_upload():
         if existing:
             existing.description = desc
             existing.keywords = str(row.get("keywords", "")).strip()
-            existing.category = str(row.get("category", "")).strip()
+            existing.category = str(row.get("material_category", row.get("category", ""))).strip()
             existing.unit_of_measure = str(row.get("unit_of_measure", "EA")).strip()
+            existing.branch_system_id = str(row.get("branch_system_id", "")).strip()
+            existing.sold_weight = float(row.get("sold_weight", 0.25)) if pd.notna(row.get("sold_weight")) else 0.25
+            existing.ai_match_text = str(row.get("ai_match_text", "")).strip()
             existing.embedding = None  # invalidate stale embedding
             updated += 1
         else:
@@ -416,8 +426,11 @@ def catalog_upload():
                 item_code=code,
                 description=desc,
                 keywords=str(row.get("keywords", "")).strip(),
-                category=str(row.get("category", "")).strip(),
+                category=str(row.get("material_category", row.get("category", ""))).strip(),
                 unit_of_measure=str(row.get("unit_of_measure", "EA")).strip(),
+                branch_system_id=str(row.get("branch_system_id", "")).strip(),
+                sold_weight=float(row.get("sold_weight", 0.25)) if pd.notna(row.get("sold_weight")) else 0.25,
+                ai_match_text=str(row.get("ai_match_text", "")).strip(),
             )
             db.session.add(item)
             added += 1

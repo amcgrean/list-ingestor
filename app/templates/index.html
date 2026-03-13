@@ -22,6 +22,19 @@
       <button type="button" class="btn btn-secondary" id="gallery-btn">&#128193; Choose File</button>
     </div>
 
+    <div class="provider-selector" style="margin-top: 1.5rem;">
+      <label class="provider-label" for="branch_system_id">Branch / System Context</label>
+      <div class="provider-options">
+        <select id="branch_system_id" name="branch_system_id" class="form-control" style="width: 100%; padding: 0.5rem; border-radius: 4px; border: 1px solid #ccc;">
+          <option value="">Global (All Branches)</option>
+          {% for branch in branches %}
+            <option value="{{ branch }}">{{ branch }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <p class="drop-zone-hint" style="margin-top: 0.5rem;">Select a branch to prioritize regional SKU matches. Falls back to global items automatically.</p>
+    </div>
+
     <div id="file-preview" class="file-preview hidden">
       <span class="file-icon">&#128196;</span>
       <span id="file-name" class="file-name"></span>

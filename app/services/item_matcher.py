@@ -140,6 +140,8 @@ def match_item(
     model_name: str,
     fuzzy_weight: float = 0.4,
     vector_weight: float = 0.6,
+    recency_weight: float = 0.15,
+    branch_system_id: str = "",
 ) -> MatchResult:
     """
     Find the best-matching ERP catalog item for a given extracted description.
@@ -181,18 +183,31 @@ def match_item(
             vector_scores.append(0.0)
 
     # --- Combined score ---
-    combined = [
-        (f * fuzzy_weight) + (v * vector_weight)
-        for f, v in zip(fuzzy_scores, vector_scores)
-    ]
+    # Try branch specific items first
+    best_idx = -1
+    best_score = -1.0
+    
+    for i, item in enumerate(erp_items):
+        score = (fuzzy_scores[i] * fuzzy_weight) + (vector_scores[i] * vector_weight)
+        
+        # Add recency tiebreaker
+        hw = getattr(item, "sold_weight", 0.0)
+        score += hw * recency_weight
+        
+        # Add slight penalty for out-of-branch catalog items if a branch is selected
+        if branch_system_id and getattr(item, 'branch_system_id', '') != branch_system_id:
+            score -= 0.15
+            
+        if score > best_score:
+            best_score = score
+            best_idx = i
 
-    best_idx = int(np.argmax(combined))
     best_item = erp_items[best_idx]
 
     return {
         "matched_item_code": best_item.item_code,
         "matched_description": best_item.description,
-        "confidence_score": round(combined[best_idx], 4),
+        "confidence_score": round(best_score, 4),
         "fuzzy_score": round(fuzzy_scores[best_idx], 4),
         "vector_score": round(vector_scores[best_idx], 4),
     }
@@ -204,6 +219,8 @@ def match_items_batch(
     model_name: str,
     fuzzy_weight: float = 0.4,
     vector_weight: float = 0.6,
+    recency_weight: float = 0.15,
+    branch_system_id: str = "",
 ) -> list[MatchResult]:
     """Batch version — pre-embeds all queries in one shot for efficiency."""
     if not erp_items:
@@ -234,18 +251,30 @@ def match_items_batch(
         ]
         vector_sims = np.clip(catalog_matrix @ q_emb, 0, 1).tolist()
 
-        combined = [
-            (f * fuzzy_weight) + (v * vector_weight)
-            for f, v in zip(fuzzy_scores, vector_sims)
-        ]
+        best_idx = -1
+        best_score = -1.0
+        
+        for j, item in enumerate(erp_items):
+            score = (fuzzy_scores[j] * fuzzy_weight) + (vector_sims[j] * vector_weight)
+            
+            # Recency tiebreaker
+            hw = getattr(item, "sold_weight", 0.0)
+            score += hw * recency_weight
+            
+            # Penalty for out-of-branch
+            if branch_system_id and getattr(item, 'branch_system_id', '') != branch_system_id:
+                score -= 0.15
+                
+            if score > best_score:
+                best_score = score
+                best_idx = j
 
-        best_idx = int(np.argmax(combined))
         best_item = erp_items[best_idx]
 
         results.append({
             "matched_item_code": best_item.item_code,
             "matched_description": best_item.description,
-            "confidence_score": round(combined[best_idx], 4),
+            "confidence_score": round(best_score, 4),
             "fuzzy_score": round(fuzzy_scores[best_idx], 4),
             "vector_score": round(vector_sims[best_idx], 4),
         })

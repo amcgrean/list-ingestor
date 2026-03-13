@@ -13,6 +13,10 @@ class ERPItem(db.Model):
     keywords = db.Column(db.Text, default="")
     category = db.Column(db.String(100), default="")
     unit_of_measure = db.Column(db.String(50), default="EA")
+    branch_system_id = db.Column(db.String(100), default="")
+    sold_weight = db.Column(db.Float, default=0.25)
+    ai_match_text = db.Column(db.Text, default="")
+    
     # Serialized embedding vector (list of floats as JSON string)
     _embedding = db.Column("embedding", db.Text, nullable=True)
 
@@ -32,6 +36,9 @@ class ERPItem(db.Model):
     @property
     def searchable_text(self):
         """Combined text used for matching."""
+        if self.ai_match_text:
+            return self.ai_match_text
+            
         parts = [self.description]
         if self.keywords:
             parts.append(self.keywords)
@@ -47,6 +54,7 @@ class ERPItem(db.Model):
             "keywords": self.keywords,
             "category": self.category,
             "unit_of_measure": self.unit_of_measure,
+            "branch_system_id": self.branch_system_id,
         }
 
 

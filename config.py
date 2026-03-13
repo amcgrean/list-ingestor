@@ -36,6 +36,7 @@ class Config:
     # Matching weights
     FUZZY_WEIGHT = float(os.environ.get("FUZZY_WEIGHT", "0.4"))
     VECTOR_WEIGHT = float(os.environ.get("VECTOR_WEIGHT", "0.6"))
+    RECENCY_WEIGHT = float(os.environ.get("RECENCY_WEIGHT", "0.15"))
     CONFIDENCE_THRESHOLD = float(os.environ.get("CONFIDENCE_THRESHOLD", "0.45"))
 
     # Sentence-Transformers model (downloaded on first use)

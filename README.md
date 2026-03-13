@@ -136,6 +136,27 @@ All settings are controlled via environment variables (see `.env.example`):
 | `CONFIDENCE_THRESHOLD` | `0.45` | Scores below this are flagged low-confidence |
 | `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | sentence-transformers model |
 
+## SKU Catalog Generation & Management
+
+The system now supports a highly accurate matching pipeline using semantic embeddings and branch-aware filtering.
+
+### 1. Local Generation
+Use the `rebuild_catalogs.bat` script in the root directory to process the source `stock items to parse.xlsx` file. This script runs `sku_cleaner.py` to:
+- Extract detailed attributes (size, material, category).
+- Calculate a `sold_weight` based on sales recency (highly recently sold items are prioritized).
+- Generate a master `erp_items_ai_ready.csv` and branch-specific catalogs.
+
+### 2. Ingestion
+Run `python import_catalog.py` from the root to:
+- Wipe the current catalog and load the latest entries from `erp_items_ai_ready.csv`.
+- Precompute high-dimensional vector embeddings for all items locally using the `all-MiniLM-L6-v2` model.
+
+### 3. Branch-Aware Matching
+When uploading a material list, you can select a **Branch / System Context**. The system will:
+- Prioritize matches from that branch.
+- Fall back to the global catalog if no high-confidence match is found in the branch.
+- Use a hybrid score: `(0.4 * Fuzzy) + (0.6 * Vector) + (0.15 * Recency Weight)`.
+
 ---
 
 ## Project Structure
