@@ -1,145 +1,58 @@
-"""
-Item Matcher Service
---------------------
-Matches extracted descriptions to ERP catalog items using a hybrid approach:
+"""Hybrid SKU item matching service."""
 
-  1. Fuzzy text matching via RapidFuzz (token_set_ratio)
-  2. Vector cosine similarity via sentence-transformers
+from __future__ import annotations
 
-  final_score = (fuzzy_score * FUZZY_WEIGHT) + (vector_score * VECTOR_WEIGHT)
-
-Also normalises common lumber/construction formats before matching.
-"""
-
-import logging
 import re
-from typing import Optional
+from typing import Iterable
 
-import numpy as np
-from rapidfuzz import fuzz
-from sentence_transformers import SentenceTransformer
-
-logger = logging.getLogger(__name__)
-
-# Lazy-loaded singleton so the model is downloaded only once
-_model: Optional[SentenceTransformer] = None
+from app.models import ERPItem, ItemAlias
+from app.services.fuzzy_matcher import fuzzy_match
+from app.services.size_parser import parse_size_and_length
+from app.services.vector_index import VectorIndex
 
 
-def _get_model(model_name: str) -> SentenceTransformer:
-    global _model
-    if _model is None:
-        logger.info("Loading sentence-transformers model: %s", model_name)
-        _model = SentenceTransformer(model_name)
-    return _model
-
-
-# ---------------------------------------------------------------------------
-# Normalisation helpers
-# ---------------------------------------------------------------------------
-
-_LENGTH_WORDS = {
-    "eight": "8", "ten": "10", "twelve": "12", "fourteen": "14",
-    "sixteen": "16", "eighteen": "18", "twenty": "20",
-    "twentyfour": "24", "twenty four": "24",
-}
-
-_UNIT_NORMALISATION = {
-    r"\blf\b": "linear feet",
-    r"\blin\b": "linear",
-    r"\bft\b": "ft",
-    r"\bpcs?\b": "piece",
-    r"\bpkgs?\b": "package",
-    r"\blbs?\b": "lb",
-    r"\bpd\b": "lb",
-    r"\bsf\b": "square feet",
-    r"\bbf\b": "board feet",
-    r"\bea\b": "each",
-}
+_vector_index: VectorIndex | None = None
+_index_size = 0
 
 
 def normalise_description(text: str) -> str:
-    """
-    Convert common construction shorthand to expanded form so fuzzy / vector
-    matching has more surface area to work with.
-
-    Examples:
-        "2x10x16"      → "2x10 16ft"
-        "2x10 sixteen" → "2x10 16ft"
-        "3/4 cdx ply"  → "3/4 cdx plywood"
-    """
-    text = text.lower().strip()
-
-    # Expand written-out lengths ("sixteen" → "16")
-    for word, digit in _LENGTH_WORDS.items():
-        text = re.sub(r"\b" + word + r"\b", digit, text)
-
-    # Expand unit abbreviations
-    for pattern, replacement in _UNIT_NORMALISATION.items():
-        text = re.sub(pattern, replacement, text)
-
-    # "2x10x16" → "2x10 16ft"
-    text = re.sub(r"(\d+x\d+)x(\d+)", r"\1 \2ft", text)
-
-    # "2x10 16" (number after dimension) → "2x10 16ft"
-    text = re.sub(r"(\d+x\d+)\s+(\d+)(?!\s*ft|\s*inch|\s*in\b)", r"\1 \2ft", text)
-
-    # Expand "ply" → "plywood"
-    text = re.sub(r"\bply\b", "plywood", text)
-
-    # Expand "pt" → "pressure treated" (common in lumber)
+    text = (text or "").lower().strip()
+    text = re.sub(r"(\d+x\d+)x(\d{1,2})", r"\1 \2ft", text)
     text = re.sub(r"\bpt\b", "pressure treated", text)
-
-    return text.strip()
-
-
-# ---------------------------------------------------------------------------
-# Embedding helpers
-# ---------------------------------------------------------------------------
-
-def _embed(texts: list[str], model_name: str) -> np.ndarray:
-    model = _get_model(model_name)
-    return model.encode(texts, convert_to_numpy=True, normalize_embeddings=True)
+    return re.sub(r"\s+", " ", text)
 
 
-def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
-    """Cosine similarity between two normalised vectors (dot product)."""
-    return float(np.dot(a, b))
+def _ensure_vector_index(erp_items: Iterable[ERPItem], model_name: str) -> VectorIndex:
+    global _vector_index, _index_size
+    items = list(erp_items)
+    if _vector_index is None or _index_size != len(items) or _vector_index.model_name != model_name:
+        _vector_index = VectorIndex(model_name=model_name)
+        _vector_index.build_index(items)
+        _index_size = len(items)
+    return _vector_index
 
 
-# ---------------------------------------------------------------------------
-# Catalog embedding pre-computation
-# ---------------------------------------------------------------------------
-
-def compute_catalog_embeddings(erp_items: list, model_name: str) -> None:
-    """
-    Compute and store embeddings for all ERPItem objects in place.
-    Call this after loading a new catalog or on first run.
-    """
-    if not erp_items:
-        return
-
-    texts = [normalise_description(item.searchable_text) for item in erp_items]
-    embeddings = _embed(texts, model_name)
-
-    for item, emb in zip(erp_items, embeddings):
-        item.embedding = emb.tolist()
-
-    logger.info("Computed embeddings for %d ERP items.", len(erp_items))
+def build_index(catalog, model_name: str):
+    idx = _ensure_vector_index(catalog, model_name)
+    return idx
 
 
-# ---------------------------------------------------------------------------
-# Matching
-# ---------------------------------------------------------------------------
+def _alias_lookup(description: str):
+    normalized = normalise_description(description)
+    return ItemAlias.query.filter_by(alias=normalized).first()
 
-MatchResult = dict  # typed for readability
+
+def _catalog_by_sku(erp_items):
+    return {item.sku: item for item in erp_items}
 
 
 def match_item(
     description: str,
-    erp_items: list,
+    erp_items: list[ERPItem],
     model_name: str,
     fuzzy_weight: float = 0.4,
     vector_weight: float = 0.6,
+<<<<<<< HEAD
     recency_weight: float = 0.15,
     branch_system_id: str = "",
 ) -> MatchResult:
@@ -210,15 +123,97 @@ def match_item(
         "confidence_score": round(best_score, 4),
         "fuzzy_score": round(fuzzy_scores[best_idx], 4),
         "vector_score": round(vector_scores[best_idx], 4),
+=======
+):
+    results = match_item_candidates(
+        description,
+        erp_items,
+        model_name=model_name,
+        fuzzy_weight=fuzzy_weight,
+        vector_weight=vector_weight,
+        k=5,
+    )
+    if not results:
+        return _no_match()
+
+    top = results[0]
+    return {
+        "matched_item_code": top["sku"],
+        "matched_description": top["description"],
+        "confidence_score": top["confidence_score"],
+        "fuzzy_score": top["fuzzy_score"],
+        "vector_score": top["vector_score"],
+        "candidates": results,
+>>>>>>> origin
     }
+
+
+def match_item_candidates(
+    description: str,
+    erp_items: list[ERPItem],
+    model_name: str,
+    fuzzy_weight: float = 0.4,
+    vector_weight: float = 0.6,
+    k: int = 5,
+):
+    if not erp_items:
+        return []
+
+    alias = _alias_lookup(description)
+    by_sku = _catalog_by_sku(erp_items)
+    if alias and alias.sku in by_sku:
+        item = by_sku[alias.sku]
+        return [{
+            "sku": item.sku,
+            "description": item.description,
+            "confidence_score": 1.0,
+            "fuzzy_score": 1.0,
+            "vector_score": 1.0,
+            "size": item.size,
+            "length": item.length,
+        }]
+
+    norm_desc = normalise_description(description)
+    size, length = parse_size_and_length(norm_desc)
+
+    idx = _ensure_vector_index(erp_items, model_name)
+    vector_hits = idx.search(norm_desc, k=max(k * 2, 10))
+    vector_scores = {hit.sku: hit.score for hit in vector_hits}
+
+    candidates = []
+    for sku, v_score in vector_scores.items():
+        item = by_sku.get(sku)
+        if not item:
+            continue
+        f_score = fuzzy_match(norm_desc, [item])["score"]
+        final_score = (v_score * vector_weight) + (f_score * fuzzy_weight)
+
+        if size and item.size and item.size.lower().replace(" ", "") == size.lower().replace(" ", ""):
+            final_score += 0.08
+        if length and item.length and str(item.length) == str(length):
+            final_score += 0.08
+
+        candidates.append({
+            "sku": item.sku,
+            "description": item.description,
+            "confidence_score": round(min(final_score, 1.0), 4),
+            "fuzzy_score": round(f_score, 4),
+            "vector_score": round(v_score, 4),
+            "size": item.size,
+            "length": item.length,
+        })
+
+    candidates.sort(key=lambda x: x["confidence_score"], reverse=True)
+    return candidates[:k]
 
 
 def match_items_batch(
     descriptions: list[str],
-    erp_items: list,
+    erp_items: list[ERPItem],
     model_name: str,
     fuzzy_weight: float = 0.4,
     vector_weight: float = 0.6,
+<<<<<<< HEAD
     recency_weight: float = 0.15,
     branch_system_id: str = "",
 ) -> list[MatchResult]:
@@ -280,13 +275,28 @@ def match_items_batch(
         })
 
     return results
+=======
+):
+    matches = []
+    for description in descriptions:
+        result = match_item(
+            description,
+            erp_items,
+            model_name=model_name,
+            fuzzy_weight=fuzzy_weight,
+            vector_weight=vector_weight,
+        )
+        matches.append(result)
+    return matches
+>>>>>>> origin
 
 
-def _no_match() -> MatchResult:
+def _no_match():
     return {
         "matched_item_code": None,
         "matched_description": None,
         "confidence_score": 0.0,
         "fuzzy_score": 0.0,
         "vector_score": 0.0,
+        "candidates": [],
     }

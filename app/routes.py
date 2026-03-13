@@ -26,7 +26,7 @@ from flask import (
 from werkzeug.utils import secure_filename
 
 from app import db
-from app.models import ERPItem, ExtractedItem, ProcessingSession
+from app.models import ERPItem, ExtractedItem, ProcessingSession, ItemAlias
 from app.services import ocr_service, ai_parser, chatgpt_parser, item_matcher
 
 logger = logging.getLogger(__name__)
@@ -271,10 +271,20 @@ def save_review(session_id):
                 item.final_quantity = float(item_data["quantity"])
             except (TypeError, ValueError):
                 pass
+        old_effective_code = item.effective_item_code()
         if "item_code" in item_data:
             item.final_item_code = item_data["item_code"] or None
         item.is_confirmed = bool(item_data.get("confirmed", False))
         item.is_skipped = bool(item_data.get("skipped", False))
+
+        new_effective_code = item.effective_item_code()
+        if new_effective_code and new_effective_code != old_effective_code:
+            alias_key = item_matcher.normalise_description(item.raw_description)
+            alias = ItemAlias.query.filter_by(alias=alias_key).first()
+            if alias:
+                alias.sku = new_effective_code
+            else:
+                db.session.add(ItemAlias(alias=alias_key, sku=new_effective_code))
 
     session.status = "reviewed"
     db.session.commit()
@@ -414,7 +424,16 @@ def catalog_upload():
         if existing:
             existing.description = desc
             existing.keywords = str(row.get("keywords", "")).strip()
+<<<<<<< HEAD
             existing.category = str(row.get("material_category", row.get("category", ""))).strip()
+=======
+            existing.category = str(row.get("category", "")).strip()
+            existing.material_category = str(row.get("material_category", "")).strip()
+            existing.size = str(row.get("size", "")).strip()
+            existing.length = str(row.get("length", "")).strip()
+            existing.brand = str(row.get("brand", "")).strip()
+            existing.normalized_name = str(row.get("normalized_name", "")).strip()
+>>>>>>> origin
             existing.unit_of_measure = str(row.get("unit_of_measure", "EA")).strip()
             existing.branch_system_id = str(row.get("branch_system_id", "")).strip()
             existing.sold_weight = float(row.get("sold_weight", 0.25)) if pd.notna(row.get("sold_weight")) else 0.25
@@ -426,7 +445,16 @@ def catalog_upload():
                 item_code=code,
                 description=desc,
                 keywords=str(row.get("keywords", "")).strip(),
+<<<<<<< HEAD
                 category=str(row.get("material_category", row.get("category", ""))).strip(),
+=======
+                category=str(row.get("category", "")).strip(),
+                material_category=str(row.get("material_category", "")).strip(),
+                size=str(row.get("size", "")).strip(),
+                length=str(row.get("length", "")).strip(),
+                brand=str(row.get("brand", "")).strip(),
+                normalized_name=str(row.get("normalized_name", "")).strip(),
+>>>>>>> origin
                 unit_of_measure=str(row.get("unit_of_measure", "EA")).strip(),
                 branch_system_id=str(row.get("branch_system_id", "")).strip(),
                 sold_weight=float(row.get("sold_weight", 0.25)) if pd.notna(row.get("sold_weight")) else 0.25,
@@ -437,17 +465,14 @@ def catalog_upload():
 
     db.session.commit()
 
-    # Pre-compute embeddings for the entire catalog
+    # Rebuild vector index for the current catalog
     all_items = ERPItem.query.all()
     try:
-        item_matcher.compute_catalog_embeddings(
-            all_items, current_app.config["EMBEDDING_MODEL"]
-        )
-        db.session.commit()
-        embed_msg = f" Embeddings computed for {len(all_items)} items."
+        item_matcher.build_index(all_items, current_app.config["EMBEDDING_MODEL"])
+        embed_msg = f" Vector index built for {len(all_items)} items."
     except Exception as exc:
-        logger.warning("Embedding pre-computation failed: %s", exc)
-        embed_msg = " (Embeddings will be computed on first match.)"
+        logger.warning("Vector index build failed: %s", exc)
+        embed_msg = " (Vector index will be built on first match.)"
 
     flash(
         f"Catalog updated: {added} items added, {updated} items updated.{embed_msg}",

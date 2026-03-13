@@ -213,3 +213,10 @@ Output: [
   {"quantity": 100, "description": "Trex decking 16ft sandy tan"}
 ]
 ```
+
+
+## Matching Architecture
+
+The matcher now combines: vector similarity (FAISS + sentence-transformers), RapidFuzz string similarity, and structured size/length extraction. User review overrides are persisted to an `item_aliases` table so repeated contractor phrasing resolves to the corrected SKU before running semantic search.
+
+CSV catalog uploads can include these optional AI-ready columns in addition to `item_code` and `description`: `material_category`, `size`, `length`, `brand`, `keywords`, `normalized_name`.
