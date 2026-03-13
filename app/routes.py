@@ -8,6 +8,8 @@ import io
 import json
 import logging
 import os
+import tempfile
+import time
 import uuid
 from pathlib import Path
 
@@ -26,8 +28,15 @@ from flask import (
 from werkzeug.utils import secure_filename
 
 from app import db
-from app.models import ERPItem, ExtractedItem, ProcessingSession, ItemAlias
-from app.services import ocr_service, ai_parser, chatgpt_parser, item_matcher
+from app.models import ERPItem, ExtractedItem, IngesterMetrics, ProcessingSession, ItemAlias, MatchFeedbackEvent
+from app.services import item_matcher
+from app.services import metrics_service
+import sys, os as _os
+# Add project root so services/ package is importable from within the Flask app
+_PROJECT_ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+from services.openai_vision import extract_items_from_image as _vision_extract
 
 logger = logging.getLogger(__name__)
 main = Blueprint("main", __name__)
@@ -44,10 +53,17 @@ def allowed_file(filename: str) -> bool:
 
 def save_upload(file) -> Path:
     ext = Path(secure_filename(file.filename)).suffix
-    unique_name = f"{uuid.uuid4().hex}{ext}"
-    dest = Path(current_app.config["UPLOAD_FOLDER"]) / unique_name
-    file.save(dest)
-    return dest
+    fd, tmp_path = tempfile.mkstemp(suffix=ext)
+    try:
+        os.close(fd)
+        file.save(tmp_path)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+    return Path(tmp_path)
 
 
 # ---------------------------------------------------------------------------
@@ -108,26 +124,69 @@ def upload():
     db.session.add(session)
     db.session.commit()
 
-    # --- Step 1: OCR ---
-    try:
-        raw_text = ocr_service.extract_text(file_path)
-        session.raw_ocr_text = raw_text
-        session.status = "ocr_complete"
-        db.session.commit()
-    except Exception as exc:
-        logger.exception("OCR failed for session %d", session.id)
+    t_start = time.perf_counter()
+    ai_ms = match_ms = None
+    ai_parse_error = match_error = False
+    provider = "openai"  # Vision API is always OpenAI
+
+    # --- Step 1: OpenAI Vision — extract structured items directly from image ---
+    api_key = current_app.config.get("OPENAI_API_KEY", "")
+    if not api_key:
         session.status = "error"
-        session.error_message = f"OCR failed: {exc}"
+        session.error_message = "OPENAI_API_KEY is not configured."
         db.session.commit()
-        flash(f"Could not read the file: {exc}", "error")
+        flash("OpenAI Vision is not configured. Set OPENAI_API_KEY.", "error")
+        try:
+            os.unlink(file_path)
+        except OSError:
+            pass
+        return redirect(url_for("main.index"))
+
+    t0 = time.perf_counter()
+    try:
+        parsed_items = _vision_extract(
+            file_path,
+            api_key=api_key,
+            model=current_app.config["OPENAI_MODEL"],
+        )
+        ai_ms = int((time.perf_counter() - t0) * 1000)
+        # Store a text representation of extracted items for the raw-text debug view
+        session.raw_ocr_text = "\n".join(
+            f"{item['quantity']} {item['description']}" for item in parsed_items
+        )
+        session.status = "parsed"
+        db.session.commit()
+        logger.info("vision_parse_complete", extra={
+            "session_id": session.id, "stage": "vision_parse",
+            "duration_ms": ai_ms, "items": len(parsed_items),
+        })
+    except Exception as exc:
+        ai_ms = int((time.perf_counter() - t0) * 1000)
+        ai_parse_error = True
+        logger.exception("Vision parsing failed for session %d", session.id, extra={
+            "session_id": session.id, "stage": "vision_parse", "duration_ms": ai_ms,
+        })
+        session.status = "error"
+        session.error_message = f"Vision parsing failed: {exc}"
+        db.session.commit()
+        metrics_service.save_session_metrics(
+            session_id=session.id, ai_provider=provider,
+            ocr_ms=None, ai_parse_ms=ai_ms, match_ms=None,
+            total_ms=int((time.perf_counter() - t_start) * 1000),
+            items_extracted=0, items_matched=0, items_below_threshold=0,
+            avg_confidence=None, avg_fuzzy_score=None, avg_vector_score=None,
+            ai_parse_error=True,
+        )
+        flash(f"Could not read the image: {exc}", "error")
         return redirect(url_for("main.index"))
     finally:
-        # Clean up uploaded file after reading
+        # Image is never stored permanently
         try:
             os.unlink(file_path)
         except OSError:
             pass
 
+<<<<<<< HEAD
     if not raw_text.strip():
         session.status = "error"
         session.error_message = "OCR produced no text. The image may be unreadable."
@@ -188,17 +247,29 @@ def upload():
             flash(f"AI parsing failed: {exc}", "error")
             return redirect(url_for("main.index"))
 
+=======
+>>>>>>> 5dd3cacfc5e303f18507daa52cacc69be6a12bbe
     if not parsed_items:
         session.status = "error"
-        session.error_message = "AI returned no items from the material list."
+        session.error_message = "Vision API returned no items from the material list."
         db.session.commit()
+        metrics_service.save_session_metrics(
+            session_id=session.id, ai_provider=provider,
+            ocr_ms=None, ai_parse_ms=ai_ms, match_ms=None,
+            total_ms=int((time.perf_counter() - t_start) * 1000),
+            items_extracted=0, items_matched=0, items_below_threshold=0,
+            avg_confidence=None, avg_fuzzy_score=None, avg_vector_score=None,
+            ai_parse_error=True,
+        )
         flash("No items could be extracted from the material list.", "warning")
         return redirect(url_for("main.index"))
 
     # --- Step 3: Item matching ---
     erp_items = ERPItem.query.all()
     descriptions = [item["description"] for item in parsed_items]
+    threshold = current_app.config["CONFIDENCE_THRESHOLD"]
 
+    t0 = time.perf_counter()
     if erp_items:
         try:
             match_results = item_matcher.match_items_batch(
@@ -210,10 +281,29 @@ def upload():
                 branch_system_id=branch_id,
             )
         except Exception as exc:
-            logger.exception("Item matching failed for session %d", session.id)
+            logger.exception("Item matching failed for session %d", session.id, extra={
+                "session_id": session.id, "stage": "match",
+            })
+            match_error = True
             match_results = [item_matcher._no_match() for _ in parsed_items]
     else:
         match_results = [item_matcher._no_match() for _ in parsed_items]
+    match_ms = int((time.perf_counter() - t0) * 1000)
+    total_ms = int((time.perf_counter() - t_start) * 1000)
+
+    logger.info("match_complete", extra={
+        "session_id": session.id, "stage": "match",
+        "duration_ms": match_ms, "items": len(match_results),
+    })
+
+    confidence_scores = [r["confidence_score"] for r in match_results]
+    fuzzy_scores = [r["fuzzy_score"] for r in match_results]
+    vector_scores = [r["vector_score"] for r in match_results]
+    items_matched = sum(1 for r in match_results if r["matched_item_code"])
+    items_below = sum(1 for r in match_results if r["confidence_score"] < threshold)
+    avg_conf = sum(confidence_scores) / len(confidence_scores) if confidence_scores else None
+    avg_fuzzy = sum(fuzzy_scores) / len(fuzzy_scores) if fuzzy_scores else None
+    avg_vec = sum(vector_scores) / len(vector_scores) if vector_scores else None
 
     for parsed, match in zip(parsed_items, match_results):
         extracted = ExtractedItem(
@@ -231,6 +321,29 @@ def upload():
     session.status = "matched"
     db.session.commit()
 
+    # Persist pipeline metrics
+    metrics_service.save_session_metrics(
+        session_id=session.id,
+        ai_provider=provider,
+        ocr_ms=None,
+        ai_parse_ms=ai_ms,
+        match_ms=match_ms,
+        total_ms=total_ms,
+        items_extracted=len(parsed_items),
+        items_matched=items_matched,
+        items_below_threshold=items_below,
+        avg_confidence=avg_conf,
+        avg_fuzzy_score=avg_fuzzy,
+        avg_vector_score=avg_vec,
+        match_error=match_error,
+    )
+
+    logger.info("upload_complete", extra={
+        "session_id": session.id, "stage": "upload",
+        "duration_ms": total_ms, "ai_provider": provider,
+        "items": len(parsed_items),
+    })
+
     return redirect(url_for("main.review", session_id=session.id))
 
 
@@ -243,13 +356,14 @@ def review(session_id):
     session = ProcessingSession.query.get_or_404(session_id)
     items = ExtractedItem.query.filter_by(session_id=session_id).all()
     threshold = current_app.config["CONFIDENCE_THRESHOLD"]
-    erp_items = ERPItem.query.order_by(ERPItem.description).all()
+    # erp_items is intentionally NOT loaded here — the review template uses
+    # the /api/erp-items JS autocomplete endpoint, so loading the entire
+    # catalog into memory for every review page visit was wasted RAM.
     return render_template(
         "review.html",
         session=session,
         items=items,
         threshold=threshold,
-        erp_items=erp_items,
     )
 
 
@@ -277,14 +391,29 @@ def save_review(session_id):
         item.is_confirmed = bool(item_data.get("confirmed", False))
         item.is_skipped = bool(item_data.get("skipped", False))
 
+        alias_key = item_matcher.normalise_description(item.raw_description)
         new_effective_code = item.effective_item_code()
         if new_effective_code and new_effective_code != old_effective_code:
-            alias_key = item_matcher.normalise_description(item.raw_description)
             alias = ItemAlias.query.filter_by(alias=alias_key).first()
             if alias:
                 alias.sku = new_effective_code
+                alias.usage_count = (alias.usage_count or 0) + 1
             else:
-                db.session.add(ItemAlias(alias=alias_key, sku=new_effective_code))
+                db.session.add(ItemAlias(alias=alias_key, sku=new_effective_code, usage_count=1))
+
+        db.session.add(MatchFeedbackEvent(
+            session_id=session_id,
+            extracted_item_id=item.id,
+            raw_description=item.raw_description,
+            normalized_description=alias_key,
+            predicted_sku=item.matched_item_code,
+            final_sku=new_effective_code,
+            was_corrected=bool(new_effective_code and new_effective_code != item.matched_item_code),
+            was_skipped=item.is_skipped,
+            confidence_score=float(item.confidence_score or 0.0),
+            fuzzy_score=float(item.fuzzy_score or 0.0),
+            vector_score=float(item.vector_score or 0.0),
+        ))
 
     session.status = "reviewed"
     db.session.commit()
@@ -317,12 +446,18 @@ def export(session_id, fmt):
     session = ProcessingSession.query.get_or_404(session_id)
     items = ExtractedItem.query.filter_by(session_id=session_id).all()
 
+    # Collect all item codes in one pass, then load ERP records in a single query
+    active_items = [item for item in items if not item.is_skipped]
+    codes_needed = list({item.effective_item_code() for item in active_items if item.effective_item_code()})
+    erp_by_code = (
+        {e.item_code: e for e in ERPItem.query.filter(ERPItem.item_code.in_(codes_needed)).all()}
+        if codes_needed else {}
+    )
+
     rows = []
-    for item in items:
-        if item.is_skipped:
-            continue
+    for item in active_items:
         code = item.effective_item_code()
-        erp = ERPItem.query.filter_by(item_code=code).first() if code else None
+        erp = erp_by_code.get(code) if code else None
         rows.append({
             "quantity": item.effective_quantity(),
             "item_code": code or "",
@@ -412,15 +547,29 @@ def catalog_upload():
         ERPItem.query.delete()
         db.session.commit()
 
-    added = 0
-    updated = 0
+    # Build a list of valid rows first
+    valid_rows = []
     for _, row in df.iterrows():
         code = str(row["item_code"]).strip()
         desc = str(row["description"]).strip()
-        if not code or not desc:
-            continue
+        if code and desc:
+            valid_rows.append((code, row))
 
-        existing = ERPItem.query.filter_by(item_code=code).first()
+    # Load all existing items in one query instead of N per-row SELECTs
+    all_codes = [code for code, _ in valid_rows]
+    existing_map = {}
+    if all_codes:
+        existing_map = {
+            item.item_code: item
+            for item in ERPItem.query.filter(ERPItem.item_code.in_(all_codes)).all()
+        }
+
+    added = 0
+    updated = 0
+    _CHUNK = 500  # flush to DB in chunks to keep transaction memory bounded
+    for i, (code, row) in enumerate(valid_rows):
+        desc = str(row["description"]).strip()
+        existing = existing_map.get(code)
         if existing:
             existing.description = desc
             existing.keywords = str(row.get("keywords", "")).strip()
@@ -463,13 +612,24 @@ def catalog_upload():
             db.session.add(item)
             added += 1
 
+        # Flush in chunks so the session doesn't accumulate unbounded objects
+        if (i + 1) % _CHUNK == 0:
+            db.session.flush()
+
     db.session.commit()
 
     # Rebuild vector index for the current catalog
     all_items = ERPItem.query.all()
     try:
-        item_matcher.build_index(all_items, current_app.config["EMBEDDING_MODEL"])
-        embed_msg = f" Vector index built for {len(all_items)} items."
+        idx = item_matcher.build_index(all_items, current_app.config["EMBEDDING_MODEL"])
+        if idx is not None and idx.catalog_refs:
+            embed_msg = f" Vector index built for {len(all_items)} items."
+        else:
+            embed_msg = (
+                " WARNING: vector index is empty — the sentence-transformers model"
+                " may not be loaded. Matching will use fuzzy-only mode until the"
+                " model is available."
+            )
     except Exception as exc:
         logger.warning("Vector index build failed: %s", exc)
         embed_msg = " (Vector index will be built on first match.)"
@@ -503,6 +663,55 @@ def session_raw(session_id):
 # Health check (used by Render / Fly.io / Docker)
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Metrics dashboard + API
+# ---------------------------------------------------------------------------
+
+@main.route("/metrics")
+def metrics_dashboard():
+    """Human-readable metrics dashboard."""
+    days = request.args.get("days", 30, type=int)
+    summary = metrics_service.get_summary(days=days)
+    recent = metrics_service.get_recent_sessions(limit=25)
+    conf_dist = metrics_service.get_confidence_distribution(days=days)
+    provider_stats = metrics_service.get_provider_stats(days=days)
+    return render_template(
+        "metrics.html",
+        summary=summary,
+        recent_sessions=recent,
+        conf_dist=conf_dist,
+        provider_stats=provider_stats,
+        days=days,
+    )
+
+
+@main.route("/api/metrics")
+def api_metrics():
+    """Machine-readable metrics endpoint for agents and monitoring tools.
+
+    Query params:
+      days (int, default 30): rolling window for aggregate stats
+      sessions (int, default 25): number of recent sessions to include
+
+    Response shape::
+
+        {
+          "summary": { ... },          # aggregate stats for the window
+          "recent_sessions": [ ... ],  # per-session timing + accuracy
+          "confidence_distribution": { ... },  # item count per score bucket
+          "provider_stats": { ... },   # per-AI-provider breakdown
+        }
+    """
+    days = request.args.get("days", 30, type=int)
+    limit = request.args.get("sessions", 25, type=int)
+    return jsonify({
+        "summary": metrics_service.get_summary(days=days),
+        "recent_sessions": metrics_service.get_recent_sessions(limit=limit),
+        "confidence_distribution": metrics_service.get_confidence_distribution(days=days),
+        "provider_stats": metrics_service.get_provider_stats(days=days),
+    })
+
+
 @main.route("/health")
 def health():
     """Lightweight liveness + readiness probe."""
@@ -513,19 +722,29 @@ def health():
     except Exception:
         db_ok = False
 
-    catalog_count = 0
+    # Use a fast existence check rather than COUNT(*) over the full table —
+    # this endpoint is polled every 15 s and must complete well within the
+    # 5 s health-check timeout even under concurrent load.
+    has_catalog = False
     if db_ok:
         try:
-            catalog_count = ERPItem.query.count()
+            has_catalog = ERPItem.query.with_entities(ERPItem.id).limit(1).first() is not None
         except Exception:
             pass
+
+    # Report vector index health without touching the DB
+    vi = item_matcher._vector_index
+    vector_index_items = len(vi.catalog_refs) if vi is not None else 0
+    vector_model_loaded = vi.model is not None if vi is not None else False
 
     status = "ok" if db_ok else "degraded"
     return jsonify({
         "status": status,
         "db": db_ok,
-        "catalog_items": catalog_count,
+        "catalog_loaded": has_catalog,
         "anthropic_key_set": bool(current_app.config.get("ANTHROPIC_API_KEY")),
         "openai_key_set": bool(current_app.config.get("OPENAI_API_KEY")),
         "default_ai_provider": current_app.config.get("DEFAULT_AI_PROVIDER", "claude"),
+        "vector_index_items": vector_index_items,
+        "vector_model_loaded": vector_model_loaded,
     }), 200 if db_ok else 503

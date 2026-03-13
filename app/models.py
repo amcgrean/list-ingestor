@@ -3,6 +3,70 @@ from datetime import datetime
 import json
 
 
+class IngesterMetrics(db.Model):
+    """Per-session pipeline timing, volume, and error metrics captured at processing time.
+
+    Each row corresponds to one ProcessingSession upload.  Accuracy metrics
+    (correction / skip rates) are derived from MatchFeedbackEvent records after
+    the user completes review — this table captures what was measurable at
+    ingest time: stage latencies, item counts, and initial confidence scores.
+    """
+    __tablename__ = "ingester_metrics"
+
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(
+        db.Integer, db.ForeignKey("processing_sessions.id"),
+        unique=True, nullable=False, index=True,
+    )
+    ai_provider = db.Column(db.String(20), default="claude")
+
+    # Stage durations (milliseconds)
+    ocr_duration_ms = db.Column(db.Integer, nullable=True)
+    ai_parse_duration_ms = db.Column(db.Integer, nullable=True)
+    match_duration_ms = db.Column(db.Integer, nullable=True)
+    total_duration_ms = db.Column(db.Integer, nullable=True)
+
+    # Volume
+    items_extracted = db.Column(db.Integer, default=0)
+    items_matched = db.Column(db.Integer, default=0)
+    items_below_threshold = db.Column(db.Integer, default=0)
+
+    # Score averages at match time (before any user correction)
+    avg_confidence = db.Column(db.Float, nullable=True)
+    avg_fuzzy_score = db.Column(db.Float, nullable=True)
+    avg_vector_score = db.Column(db.Float, nullable=True)
+
+    # Error flags
+    ocr_error = db.Column(db.Boolean, default=False)
+    ai_parse_error = db.Column(db.Boolean, default=False)
+    match_error = db.Column(db.Boolean, default=False)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    session = db.relationship("ProcessingSession", backref=db.backref("metrics", uselist=False))
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "session_id": self.session_id,
+            "ai_provider": self.ai_provider,
+            "ocr_duration_ms": self.ocr_duration_ms,
+            "ai_parse_duration_ms": self.ai_parse_duration_ms,
+            "match_duration_ms": self.match_duration_ms,
+            "total_duration_ms": self.total_duration_ms,
+            "items_extracted": self.items_extracted,
+            "items_matched": self.items_matched,
+            "items_below_threshold": self.items_below_threshold,
+            "avg_confidence": round(self.avg_confidence, 4) if self.avg_confidence is not None else None,
+            "avg_fuzzy_score": round(self.avg_fuzzy_score, 4) if self.avg_fuzzy_score is not None else None,
+            "avg_vector_score": round(self.avg_vector_score, 4) if self.avg_vector_score is not None else None,
+            "ocr_error": self.ocr_error,
+            "ai_parse_error": self.ai_parse_error,
+            "match_error": self.match_error,
+            "created_at": self.created_at.isoformat(),
+        }
+
+
 class ERPItem(db.Model):
     """An item in the ERP catalog loaded from CSV."""
     __tablename__ = "erp_items"
@@ -94,7 +158,27 @@ class ItemAlias(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     alias = db.Column(db.String(255), unique=True, nullable=False, index=True)
     sku = db.Column(db.String(100), nullable=False, index=True)
+    usage_count = db.Column(db.Integer, nullable=False, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
+class MatchFeedbackEvent(db.Model):
+    """Historical user feedback captured during review to improve matching."""
+    __tablename__ = "match_feedback_events"
+
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.Integer, db.ForeignKey("processing_sessions.id"), nullable=False, index=True)
+    extracted_item_id = db.Column(db.Integer, db.ForeignKey("extracted_items.id"), nullable=False, index=True)
+    raw_description = db.Column(db.String(500), nullable=False)
+    normalized_description = db.Column(db.String(255), nullable=False, index=True)
+    predicted_sku = db.Column(db.String(100), nullable=True, index=True)
+    final_sku = db.Column(db.String(100), nullable=True, index=True)
+    was_corrected = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    was_skipped = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    confidence_score = db.Column(db.Float, default=0.0, nullable=False)
+    fuzzy_score = db.Column(db.Float, default=0.0, nullable=False)
+    vector_score = db.Column(db.Float, default=0.0, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
 
 
 class ProcessingSession(db.Model):

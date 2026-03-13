@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 import re
+import threading
+import time
 from typing import Iterable
 
-from app.models import ERPItem, ItemAlias
+import numpy as np
+from rapidfuzz import fuzz
+from sqlalchemy import func
+
+from app.models import ERPItem, ItemAlias, MatchFeedbackEvent
 from app.services.fuzzy_matcher import fuzzy_match
 from app.services.size_parser import parse_size_and_length
 from app.services.vector_index import VectorIndex
@@ -13,6 +19,10 @@ from app.services.vector_index import VectorIndex
 
 _vector_index: VectorIndex | None = None
 _index_size = 0
+_index_lock = threading.Lock()  # guards index build so only one thread rebuilds at a time
+
+import logging as _logging
+_log = _logging.getLogger(__name__)
 
 
 def normalise_description(text: str) -> str:
@@ -25,10 +35,26 @@ def normalise_description(text: str) -> str:
 def _ensure_vector_index(erp_items: Iterable[ERPItem], model_name: str) -> VectorIndex:
     global _vector_index, _index_size
     items = list(erp_items)
-    if _vector_index is None or _index_size != len(items) or _vector_index.model_name != model_name:
-        _vector_index = VectorIndex(model_name=model_name)
-        _vector_index.build_index(items)
-        _index_size = len(items)
+    # Fast path: check without lock first
+    if _vector_index is not None and _index_size == len(items) and _vector_index.model_name == model_name:
+        return _vector_index
+    # Slow path: only one thread builds the index at a time
+    with _index_lock:
+        # Re-check inside the lock in case another thread just built it
+        if _vector_index is None or _index_size != len(items) or _vector_index.model_name != model_name:
+            idx = VectorIndex(model_name=model_name)
+            idx.build_index(items)
+            _vector_index = idx
+            if idx.catalog_refs:
+                # Only cache as valid when the index actually has content.
+                _index_size = len(items)
+            else:
+                _log.warning(
+                    "vector_index_empty: index built for %d items but catalog_refs is empty "
+                    "(sentence-transformers model may have failed to load). "
+                    "Matching will fall back to fuzzy-only.",
+                    len(items),
+                )
     return _vector_index
 
 
@@ -42,8 +68,99 @@ def _alias_lookup(description: str):
     return ItemAlias.query.filter_by(alias=normalized).first()
 
 
+def _alias_lookup_batch(descriptions: list[str]) -> dict[str, str]:
+    """Return {normalized_description: sku} for all descriptions in one query."""
+    normalized = [normalise_description(d) for d in descriptions]
+    unique = list(set(normalized))
+    if not unique:
+        return {}
+    try:
+        rows = ItemAlias.query.filter(ItemAlias.alias.in_(unique)).all()
+    except RuntimeError:
+        return {}
+    return {row.alias: row.sku for row in rows}
+
+
 def _catalog_by_sku(erp_items):
     return {item.sku: item for item in erp_items}
+
+
+def _feedback_counts(normalized_description: str) -> dict[str, int]:
+    if not normalized_description:
+        return {}
+
+    try:
+        rows = (
+            MatchFeedbackEvent.query.with_entities(
+                MatchFeedbackEvent.final_sku,
+                func.count(MatchFeedbackEvent.id),
+            )
+            .filter(
+                MatchFeedbackEvent.normalized_description == normalized_description,
+                MatchFeedbackEvent.final_sku.isnot(None),
+                MatchFeedbackEvent.was_skipped.is_(False),
+            )
+            .group_by(MatchFeedbackEvent.final_sku)
+            .all()
+        )
+    except RuntimeError:
+        return {}
+
+    return {sku: int(count) for sku, count in rows if sku}
+
+
+def _feedback_counts_batch(normalized_descriptions: list[str]) -> dict[str, dict[str, int]]:
+    """Return {normalized_description: {sku: count}} for all descriptions in one query."""
+    unique = list(set(d for d in normalized_descriptions if d))
+    if not unique:
+        return {}
+    try:
+        rows = (
+            MatchFeedbackEvent.query.with_entities(
+                MatchFeedbackEvent.normalized_description,
+                MatchFeedbackEvent.final_sku,
+                func.count(MatchFeedbackEvent.id),
+            )
+            .filter(
+                MatchFeedbackEvent.normalized_description.in_(unique),
+                MatchFeedbackEvent.final_sku.isnot(None),
+                MatchFeedbackEvent.was_skipped.is_(False),
+            )
+            .group_by(MatchFeedbackEvent.normalized_description, MatchFeedbackEvent.final_sku)
+            .all()
+        )
+    except RuntimeError:
+        return {}
+
+    result: dict[str, dict[str, int]] = {}
+    for norm_desc, sku, count in rows:
+        if norm_desc and sku:
+            result.setdefault(norm_desc, {})[sku] = int(count)
+    return result
+
+
+def _apply_feedback_rerank(candidates: list[dict], feedback_counts: dict[str, int]) -> list[dict]:
+    if not candidates or not feedback_counts:
+        return candidates
+
+    total = sum(feedback_counts.values())
+    if total <= 0:
+        return candidates
+
+    reranked = []
+    for candidate in candidates:
+        sku = candidate["sku"]
+        count = feedback_counts.get(sku, 0)
+        ratio = count / total
+        boost = min(0.2, (ratio * 0.15) + (min(count, 5) * 0.01))
+        updated = dict(candidate)
+        updated["feedback_boost"] = round(boost, 4)
+        updated["feedback_count"] = count
+        updated["confidence_score"] = round(min(updated["confidence_score"] + boost, 1.0), 4)
+        reranked.append(updated)
+
+    reranked.sort(key=lambda x: x["confidence_score"], reverse=True)
+    return reranked
 
 
 def match_item(
@@ -52,78 +169,8 @@ def match_item(
     model_name: str,
     fuzzy_weight: float = 0.4,
     vector_weight: float = 0.6,
-<<<<<<< HEAD
     recency_weight: float = 0.15,
     branch_system_id: str = "",
-) -> MatchResult:
-    """
-    Find the best-matching ERP catalog item for a given extracted description.
-
-    Returns a dict with:
-        matched_item_code   – str or None
-        matched_description – str or None
-        confidence_score    – float 0-1
-        fuzzy_score         – float 0-1
-        vector_score        – float 0-1
-    """
-    if not erp_items:
-        return _no_match()
-
-    norm_desc = normalise_description(description)
-
-    # --- Fuzzy scoring ---
-    fuzzy_scores = []
-    for item in erp_items:
-        norm_catalog = normalise_description(item.searchable_text)
-        score = fuzz.token_set_ratio(norm_desc, norm_catalog) / 100.0
-        fuzzy_scores.append(score)
-
-    # --- Vector scoring ---
-    query_emb = _embed([norm_desc], model_name)[0]
-
-    vector_scores = []
-    for item in erp_items:
-        if item.embedding is not None:
-            item_emb = np.array(item.embedding, dtype=np.float32)
-            # Normalise in case it wasn't stored normalised
-            norm = np.linalg.norm(item_emb)
-            if norm > 0:
-                item_emb = item_emb / norm
-            sim = cosine_similarity(query_emb, item_emb)
-            # Clamp to [0, 1] — cosine can be slightly negative for dissimilar texts
-            vector_scores.append(max(0.0, sim))
-        else:
-            vector_scores.append(0.0)
-
-    # --- Combined score ---
-    # Try branch specific items first
-    best_idx = -1
-    best_score = -1.0
-    
-    for i, item in enumerate(erp_items):
-        score = (fuzzy_scores[i] * fuzzy_weight) + (vector_scores[i] * vector_weight)
-        
-        # Add recency tiebreaker
-        hw = getattr(item, "sold_weight", 0.0)
-        score += hw * recency_weight
-        
-        # Add slight penalty for out-of-branch catalog items if a branch is selected
-        if branch_system_id and getattr(item, 'branch_system_id', '') != branch_system_id:
-            score -= 0.15
-            
-        if score > best_score:
-            best_score = score
-            best_idx = i
-
-    best_item = erp_items[best_idx]
-
-    return {
-        "matched_item_code": best_item.item_code,
-        "matched_description": best_item.description,
-        "confidence_score": round(best_score, 4),
-        "fuzzy_score": round(fuzzy_scores[best_idx], 4),
-        "vector_score": round(vector_scores[best_idx], 4),
-=======
 ):
     results = match_item_candidates(
         description,
@@ -131,6 +178,8 @@ def match_item(
         model_name=model_name,
         fuzzy_weight=fuzzy_weight,
         vector_weight=vector_weight,
+        recency_weight=recency_weight,
+        branch_system_id=branch_system_id,
         k=5,
     )
     if not results:
@@ -144,7 +193,6 @@ def match_item(
         "fuzzy_score": top["fuzzy_score"],
         "vector_score": top["vector_score"],
         "candidates": results,
->>>>>>> origin
     }
 
 
@@ -154,6 +202,8 @@ def match_item_candidates(
     model_name: str,
     fuzzy_weight: float = 0.4,
     vector_weight: float = 0.6,
+    recency_weight: float = 0.15,
+    branch_system_id: str = "",
     k: int = 5,
 ):
     if not erp_items:
@@ -175,6 +225,7 @@ def match_item_candidates(
 
     norm_desc = normalise_description(description)
     size, length = parse_size_and_length(norm_desc)
+    feedback_counts = _feedback_counts(norm_desc)
 
     idx = _ensure_vector_index(erp_items, model_name)
     vector_hits = idx.search(norm_desc, k=max(k * 2, 10))
@@ -188,22 +239,20 @@ def match_item_candidates(
         f_score = fuzzy_match(norm_desc, [item])["score"]
         final_score = (v_score * vector_weight) + (f_score * fuzzy_weight)
 
+        # Added Local Logic: Branch Penalty and Recency Boost
+        if branch_system_id and getattr(item, 'branch_system_id', '') != branch_system_id:
+            final_score -= 0.15
+        
+        sold_weight = getattr(item, 'sold_weight', 0.0)
+        final_score += sold_weight * recency_weight
+
         if size and item.size and item.size.lower().replace(" ", "") == size.lower().replace(" ", ""):
             final_score += 0.08
         if length and item.length and str(item.length) == str(length):
             final_score += 0.08
 
-        candidates.append({
-            "sku": item.sku,
-            "description": item.description,
-            "confidence_score": round(min(final_score, 1.0), 4),
-            "fuzzy_score": round(f_score, 4),
-            "vector_score": round(v_score, 4),
-            "size": item.size,
-            "length": item.length,
-        })
-
     candidates.sort(key=lambda x: x["confidence_score"], reverse=True)
+    candidates = _apply_feedback_rerank(candidates, feedback_counts)
     return candidates[:k]
 
 
@@ -213,82 +262,155 @@ def match_items_batch(
     model_name: str,
     fuzzy_weight: float = 0.4,
     vector_weight: float = 0.6,
-<<<<<<< HEAD
     recency_weight: float = 0.15,
     branch_system_id: str = "",
-) -> list[MatchResult]:
-    """Batch version — pre-embeds all queries in one shot for efficiency."""
-    if not erp_items:
-        return [_no_match() for _ in descriptions]
+) -> list[dict]:
+    """Match a batch of descriptions against the catalog."""
+    if not descriptions:
+        return []
 
-    norm_descs = [normalise_description(d) for d in descriptions]
+    by_sku = _catalog_by_sku(erp_items)
 
-    # Embed all queries at once
-    query_embs = _embed(norm_descs, model_name)
+    # --- Single bulk alias lookup for all descriptions ---
+    alias_map = _alias_lookup_batch(descriptions)  # {norm_desc: sku}
 
-    # Build catalog embedding matrix
-    catalog_embs = []
-    for item in erp_items:
-        if item.embedding is not None:
-            emb = np.array(item.embedding, dtype=np.float32)
-            norm = np.linalg.norm(emb)
-            catalog_embs.append(emb / norm if norm > 0 else emb)
+    # Separate alias-resolved items from those that need vector search
+    results: dict[int, dict] = {}
+    needs_vector: list[tuple[int, str, str, tuple]] = []  # (idx, description, norm_desc, size_length)
+
+    for i, description in enumerate(descriptions):
+        norm_desc = normalise_description(description)
+        resolved_sku = alias_map.get(norm_desc)
+        if resolved_sku and resolved_sku in by_sku:
+            item = by_sku[resolved_sku]
+            results[i] = {
+                "matched_item_code": item.sku,
+                "matched_description": item.description,
+                "confidence_score": 1.0,
+                "fuzzy_score": 1.0,
+                "vector_score": 1.0,
+                "candidates": [{
+                    "sku": item.sku,
+                    "description": item.description,
+                    "confidence_score": 1.0,
+                    "fuzzy_score": 1.0,
+                    "vector_score": 1.0,
+                    "size": item.size,
+                    "length": item.length,
+                }],
+            }
         else:
-            catalog_embs.append(np.zeros(query_embs.shape[1], dtype=np.float32))
+            size_length = parse_size_and_length(norm_desc)
+            needs_vector.append((i, description, norm_desc, size_length))
 
-    catalog_matrix = np.stack(catalog_embs)  # (n_items, dim)
+    # --- Single bulk feedback query for all remaining descriptions ---
+    norm_descs_needing_feedback = [norm_desc for _, _, norm_desc, _ in needs_vector]
+    all_feedback = _feedback_counts_batch(norm_descs_needing_feedback)
 
-    results = []
-    for i, (norm_desc, q_emb) in enumerate(zip(norm_descs, query_embs)):
-        fuzzy_scores = [
-            fuzz.token_set_ratio(norm_desc, normalise_description(item.searchable_text)) / 100.0
-            for item in erp_items
-        ]
-        vector_sims = np.clip(catalog_matrix @ q_emb, 0, 1).tolist()
+    # Batch-encode all remaining queries in one transformer call
+    if needs_vector and erp_items:
+        idx = _ensure_vector_index(erp_items, model_name)
+        k = 5
+        norm_queries = [norm_desc for _, _, norm_desc, _ in needs_vector]
+        batch_hits = idx.search_batch(norm_queries, k=max(k * 2, 10))
 
-        best_idx = -1
-        best_score = -1.0
-        
-        for j, item in enumerate(erp_items):
-            score = (fuzzy_scores[j] * fuzzy_weight) + (vector_sims[j] * vector_weight)
-            
-            # Recency tiebreaker
-            hw = getattr(item, "sold_weight", 0.0)
-            score += hw * recency_weight
-            
-            # Penalty for out-of-branch
-            if branch_system_id and getattr(item, 'branch_system_id', '') != branch_system_id:
-                score -= 0.15
+        for (orig_idx, description, norm_desc, (size, length)), vector_hits in zip(
+            needs_vector, batch_hits
+        ):
+            feedback_counts = all_feedback.get(norm_desc, {})
+            vector_scores = {hit.sku: hit.score for hit in vector_hits}
+
+            candidates = []
+            for sku, v_score in vector_scores.items():
+                item = by_sku.get(sku)
+                if not item:
+                    continue
+                f_score = fuzzy_match(norm_desc, [item])["score"]
+                final_score = (v_score * vector_weight) + (f_score * fuzzy_weight)
+
+                # Added Local Logic: Branch Penalty and Recency Boost
+                if branch_system_id and getattr(item, 'branch_system_id', '') != branch_system_id:
+                    final_score -= 0.15
                 
-            if score > best_score:
-                best_score = score
-                best_idx = j
+                sold_weight = getattr(item, 'sold_weight', 0.0)
+                final_score += sold_weight * recency_weight
 
-        best_item = erp_items[best_idx]
+                if size and item.size and item.size.lower().replace(" ", "") == size.lower().replace(" ", ""):
+                    final_score += 0.08
+                if length and item.length and str(item.length) == str(length):
+                    final_score += 0.08
 
-        results.append({
-            "matched_item_code": best_item.item_code,
-            "matched_description": best_item.description,
-            "confidence_score": round(best_score, 4),
-            "fuzzy_score": round(fuzzy_scores[best_idx], 4),
-            "vector_score": round(vector_sims[best_idx], 4),
+                candidates.append({
+                    "sku": item.sku,
+                    "description": item.description,
+                    "confidence_score": round(min(final_score, 1.0), 4),
+                    "fuzzy_score": round(f_score, 4),
+                    "vector_score": round(v_score, 4),
+                    "size": item.size,
+                    "length": item.length,
+                })
+
+            # Fallback
+            if not candidates:
+                candidates = _fuzzy_only_candidates(norm_desc, erp_items, size, length, 
+                                                  branch_system_id, recency_weight, k=k)
+
+            candidates.sort(key=lambda x: x["confidence_score"], reverse=True)
+            candidates = _apply_feedback_rerank(candidates, feedback_counts)
+            candidates = candidates[:k]
+
+            if candidates:
+                top = candidates[0]
+                results[orig_idx] = {
+                    "matched_item_code": top["sku"],
+                    "matched_description": top["description"],
+                    "confidence_score": top["confidence_score"],
+                    "fuzzy_score": top["fuzzy_score"],
+                    "vector_score": top["vector_score"],
+                    "candidates": candidates,
+                }
+            else:
+                results[orig_idx] = _no_match()
+
+            time.sleep(0)
+    else:
+        for orig_idx, *_ in needs_vector:
+            results[orig_idx] = _no_match()
+
+    return [results[i] for i in range(len(descriptions))]
+
+
+def _fuzzy_only_candidates(norm_desc: str, erp_items: list, size, length, 
+                           branch_system_id: str = "", recency_weight: float = 0.15, k: int = 5) -> list[dict]:
+    """Pure fuzzy match across all catalog items."""
+    from app.services.fuzzy_matcher import fuzzy_match as _fmatch
+    scored = []
+    for item in erp_items:
+        f_score = _fmatch(norm_desc, [item])["score"]
+        final_score = f_score
+        
+        # Branch Penalty and Recency Boost in fallback
+        if branch_system_id and getattr(item, 'branch_system_id', '') != branch_system_id:
+            final_score -= 0.15
+        
+        sold_weight = getattr(item, 'sold_weight', 0.0)
+        final_score += sold_weight * recency_weight
+
+        if size and item.size and item.size.lower().replace(" ", "") == size.lower().replace(" ", ""):
+            final_score += 0.08
+        if length and item.length and str(item.length) == str(length):
+            final_score += 0.08
+        scored.append({
+            "sku": item.sku,
+            "description": item.description,
+            "confidence_score": round(min(final_score, 1.0), 4),
+            "fuzzy_score": round(f_score, 4),
+            "vector_score": 0.0,
+            "size": item.size,
+            "length": item.length,
         })
-
-    return results
-=======
-):
-    matches = []
-    for description in descriptions:
-        result = match_item(
-            description,
-            erp_items,
-            model_name=model_name,
-            fuzzy_weight=fuzzy_weight,
-            vector_weight=vector_weight,
-        )
-        matches.append(result)
-    return matches
->>>>>>> origin
+    scored.sort(key=lambda x: x["confidence_score"], reverse=True)
+    return scored[:k]
 
 
 def _no_match():
