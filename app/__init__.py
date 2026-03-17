@@ -110,4 +110,35 @@ def create_app(config_class=Config):
         _sync_table_columns(ERPItem)
         _sync_table_columns(IngesterMetrics)
 
+        # Pre-warm the vector index from the catalog so the first upload request
+        # doesn't stall building it from scratch (especially after a cold start).
+        _warm_vector_index(app)
+
     return app
+
+
+def _warm_vector_index(app) -> None:
+    """Load the SKU catalog from DB and build the in-memory vector index.
+
+    Called once at startup so matching works immediately without waiting for
+    the first catalog upload or the first user upload request.
+    """
+    logger = logging.getLogger(__name__)
+    try:
+        from app.models import ERPItem
+        from app.services import item_matcher
+
+        catalog = ERPItem.query.all()
+        if not catalog:
+            logger.info("startup_index_skip: catalog is empty, skipping vector index warm-up")
+            return
+
+        model_name = app.config.get("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+        logger.info("startup_index_build: building vector index for %d catalog items", len(catalog))
+        idx = item_matcher.build_index(catalog, model_name)
+        if idx and idx.catalog_refs:
+            logger.info("startup_index_ready: index built with %d items", len(idx.catalog_refs))
+        else:
+            logger.warning("startup_index_empty: index built but no refs — sentence-transformers may have failed to load")
+    except Exception:
+        logger.exception("startup_index_error: failed to warm vector index at startup")

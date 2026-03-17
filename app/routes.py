@@ -36,7 +36,8 @@ import sys, os as _os
 _PROJECT_ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
-from services.openai_vision import extract_items_from_image as _vision_extract
+from services.claude_vision import extract_items_from_image as _claude_vision_extract
+from services.openai_vision import extract_items_from_image as _openai_vision_extract
 
 logger = logging.getLogger(__name__)
 main = Blueprint("main", __name__)
@@ -122,28 +123,39 @@ def upload():
     t_start = time.perf_counter()
     ai_ms = match_ms = None
     ai_parse_error = match_error = False
-    provider = "openai"  # Vision API is always OpenAI
 
-    # --- Step 1: OpenAI Vision — extract structured items directly from image ---
-    api_key = current_app.config.get("OPENAI_API_KEY", "")
-    if not api_key:
+    # --- Step 1: Vision extraction — Claude primary, OpenAI fallback ---
+    anthropic_key = current_app.config.get("ANTHROPIC_API_KEY", "")
+    openai_key = current_app.config.get("OPENAI_API_KEY", "")
+
+    if not anthropic_key and not openai_key:
         session.status = "error"
-        session.error_message = "OPENAI_API_KEY is not configured."
+        session.error_message = "No vision API key configured (set ANTHROPIC_API_KEY or OPENAI_API_KEY)."
         db.session.commit()
-        flash("OpenAI Vision is not configured. Set OPENAI_API_KEY.", "error")
+        flash("No vision API configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY.", "error")
         try:
             os.unlink(file_path)
         except OSError:
             pass
         return redirect(url_for("main.index"))
 
+    use_claude = bool(anthropic_key)
+    provider = "claude" if use_claude else "openai"
+
     t0 = time.perf_counter()
     try:
-        parsed_items = _vision_extract(
-            file_path,
-            api_key=api_key,
-            model=current_app.config["OPENAI_MODEL"],
-        )
+        if use_claude:
+            parsed_items = _claude_vision_extract(
+                file_path,
+                api_key=anthropic_key,
+                model=current_app.config.get("CLAUDE_MODEL", "claude-opus-4-6"),
+            )
+        else:
+            parsed_items = _openai_vision_extract(
+                file_path,
+                api_key=openai_key,
+                model=current_app.config["OPENAI_MODEL"],
+            )
         ai_ms = int((time.perf_counter() - t0) * 1000)
         # Store a text representation of extracted items for the raw-text debug view
         session.raw_ocr_text = "\n".join(

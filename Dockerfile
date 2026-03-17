@@ -1,11 +1,8 @@
 # ---- Build stage ----
 FROM python:3.12-slim AS base
 
-# System dependencies: Tesseract OCR + Poppler (for pdf2image)
+# System dependencies for Postgres client + C extensions
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    tesseract-ocr \
-    tesseract-ocr-eng \
-    poppler-utils \
     libpq-dev \
     gcc \
  && rm -rf /var/lib/apt/lists/*
@@ -34,12 +31,10 @@ RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTr
 
 EXPOSE 8000
 
-# Single worker — the sentence-transformers model + FAISS index are kept in
-# process memory; multiple workers would each load their own copy and quickly
-# exhaust RAM even on the Standard 2 GB plan.
-# 1 worker process keeps the sentence-transformers model + FAISS index in a
-# single memory space (no duplication).  gthread gives us 4 threads within
-# that process so health-check and other lightweight requests are never
-# blocked by a long-running OCR upload.  Tesseract and PIL release Python's
-# GIL during their CPU work, so real concurrency happens on those threads.
+# Single worker — the sentence-transformers model + FAISS vector index are
+# kept in process memory; multiple workers would each load their own copy and
+# quickly exhaust RAM.  gthread gives us 4 concurrent threads so health-check
+# and lightweight requests are never blocked by a long-running upload.
+# Claude/OpenAI vision calls release the GIL while waiting on I/O, so real
+# concurrency happens naturally on those threads.
 CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "1", "--worker-class", "gthread", "--threads", "4", "--timeout", "300", "--worker-tmp-dir", "/dev/shm", "run:app"]
