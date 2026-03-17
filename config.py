@@ -48,3 +48,5 @@ class Config:
     EMBEDDING_MODEL = os.environ.get(
         "EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
     )
+
+    BRANCH_MATCH_FALLBACK_GLOBAL = os.environ.get("BRANCH_MATCH_FALLBACK_GLOBAL", "1") in {"1", "true", "True"}

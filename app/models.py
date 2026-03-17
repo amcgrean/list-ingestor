@@ -82,6 +82,16 @@ class ERPItem(db.Model):
     length = db.Column(db.String(20), default="")
     brand = db.Column(db.String(150), default="")
     normalized_name = db.Column(db.String(255), default="")
+    branch_system_id = db.Column(db.String(100), default="", index=True)
+    ext_description = db.Column(db.String(500), default="")
+    major_description = db.Column(db.String(255), default="")
+    minor_description = db.Column(db.String(255), default="")
+    keyword_user_defined = db.Column(db.Text, default="")
+    ai_match_text = db.Column(db.Text, default="")
+    last_sold_date = db.Column(db.String(20), default="")
+    days_since_last_sold = db.Column(db.Integer, nullable=True)
+    sold_recency_bucket = db.Column(db.String(50), default="unknown")
+    sold_weight = db.Column(db.Float, default=0.25)
     # Serialized embedding vector (list of floats as JSON string)
     _embedding = db.Column("embedding", db.Text, nullable=True)
 
@@ -114,7 +124,9 @@ class ERPItem(db.Model):
             parts.append(f"{self.length}ft")
         if self.brand:
             parts.append(self.brand)
-        if self.normalized_name:
+        if self.ai_match_text:
+            parts.append(self.ai_match_text)
+        elif self.normalized_name:
             parts.append(self.normalized_name)
         return " ".join(parts)
 
@@ -135,6 +147,16 @@ class ERPItem(db.Model):
             "length": self.length,
             "brand": self.brand,
             "normalized_name": self.normalized_name,
+            "branch_system_id": self.branch_system_id,
+            "ext_description": self.ext_description,
+            "major_description": self.major_description,
+            "minor_description": self.minor_description,
+            "keyword_user_defined": self.keyword_user_defined,
+            "ai_match_text": self.ai_match_text,
+            "last_sold_date": self.last_sold_date,
+            "days_since_last_sold": self.days_since_last_sold,
+            "sold_recency_bucket": self.sold_recency_bucket,
+            "sold_weight": self.sold_weight,
         }
 
 
@@ -179,6 +201,7 @@ class ProcessingSession(db.Model):
     status = db.Column(db.String(50), default="pending")
     # pending / ocr_complete / parsed / matched / reviewed / exported
     error_message = db.Column(db.Text, nullable=True)
+    system_id = db.Column(db.String(100), default="", index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

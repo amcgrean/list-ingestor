@@ -4,19 +4,19 @@
 {% block content %}
 <div class="page-header">
   <h1>ERP Item Catalog</h1>
-  <p class="subtitle">{{ item_count }} items loaded. Upload a CSV to add or update catalog items.</p>
+  <p class="subtitle">{{ item_count }} items loaded. Upload raw ERP export (CSV/XLSX) or processed catalog to add/update items.</p>
 </div>
 
 <!-- Upload card -->
 <div class="card">
-  <h2 class="section-title">Upload Catalog CSV</h2>
+  <h2 class="section-title">Upload / Refresh Catalog</h2>
   <p class="help-text">
-    Required columns: <code>item_code</code>, <code>description</code><br />
-    Optional columns: <code>keywords</code>, <code>category</code>, <code>unit_of_measure</code>
+    Raw ERP required columns: <code>item</code>, <code>description</code>, <code>size_</code>, <code>ext_description</code>, <code>major_description</code>, <code>minor_description</code>, <code>keyword_string</code>, <code>keyword_user_defined</code>, <code>last_sold_date</code>, <code>system_id</code><br />
+    Processed file minimum: <code>item_code</code>, <code>description</code>
   </p>
   <form action="{{ url_for('main.catalog_upload') }}" method="post" enctype="multipart/form-data">
     <div class="inline-form">
-      <input type="file" name="file" accept=".csv" required class="file-input-inline" />
+      <input type="file" name="file" accept=".csv,.xlsx,.xls" required class="file-input-inline" />
       <label class="checkbox-label">
         <input type="checkbox" name="replace_all" value="1" />
         Replace entire catalog
@@ -91,13 +91,11 @@
   {% endif %}
 </div>
 
-<!-- CSV format reference -->
+<!-- Catalog format reference -->
 <div class="card">
-  <h2 class="section-title">Expected CSV Format</h2>
-  <pre class="code-block">item_code,description,keywords,category,unit_of_measure
-POST-6X6-PT,6x6 Pressure Treated Post,post pt 6x6,Lumber,EA
-JOIST-2X10-SPF,2x10 SPF Joist 16ft,joist 2x10 spf 16,Lumber,EA
-HANGER-LUS210,LUS210 Joist Hanger,hanger lus210 joist,Hardware,BX
-TREX-16-SAND,Trex Decking 16ft Sand,trex decking sand composite,Decking,LF</pre>
+  <h2 class="section-title">Expected Raw Format</h2>
+  <pre class="code-block">item,description,size_,ext_description,major_description,minor_description,keyword_string,keyword_user_defined,last_sold_date,system_id
+POST-6X6-PT,6x6 Pressure Treated Post 10ft,6x6,treated #2 southern pine,lumber,posts,post treated 6x6,ground-contact,2026-02-12,BR01
+JOIST-2X10-16,2x10 PT 16,2x10,pressure treated joist,lumber,framing,joist 2x10 16,treated deck framing,2026-01-02,BR02</pre>
 </div>
 {% endblock %}

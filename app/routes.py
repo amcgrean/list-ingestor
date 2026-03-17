@@ -31,6 +31,13 @@ from app import db
 from app.models import ERPItem, ExtractedItem, IngesterMetrics, ProcessingSession, ItemAlias, MatchFeedbackEvent
 from app.services import item_matcher
 from app.services import metrics_service
+from app.services.sku_pipeline import (
+    CatalogValidationError,
+    looks_like_raw_file,
+    normalise_input_columns,
+    preprocess_raw_catalog,
+    write_catalog_outputs,
+)
 import sys, os as _os
 # Add project root so services/ package is importable from within the Flask app
 _PROJECT_ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
@@ -64,6 +71,35 @@ def save_upload(file) -> Path:
             pass
         raise
     return Path(tmp_path)
+
+def _resolve_system_id() -> str:
+    return (
+        request.args.get("system_id")
+        or request.form.get("system_id")
+        or request.headers.get("X-System-Id")
+        or ""
+    ).strip()
+
+
+def _read_catalog_upload(file) -> pd.DataFrame:
+    filename = (file.filename or "").lower()
+    if filename.endswith((".xlsx", ".xls")):
+        return pd.read_excel(file)
+    return pd.read_csv(file)
+
+
+def _export_catalog_artifacts() -> None:
+    rows = [item.to_dict() for item in ERPItem.query.order_by(ERPItem.item_code).all()]
+    if not rows:
+        return
+    df = pd.DataFrame(rows)
+    if "item_code" in df.columns and "sku" not in df.columns:
+        df["sku"] = df["item_code"]
+    # Backfill a minimal ai_match_text for legacy rows
+    if "ai_match_text" not in df.columns:
+        df["ai_match_text"] = ""
+    write_catalog_outputs(df, Path(current_app.root_path).parent / "data" / "catalog")
+
 
 
 # ---------------------------------------------------------------------------
@@ -111,10 +147,12 @@ def upload():
         return redirect(url_for("main.index"))
     ext = file_path.suffix.lstrip(".").lower()
 
+    system_id = _resolve_system_id()
     session = ProcessingSession(
         filename=secure_filename(file.filename),
         file_type=ext,
         status="pending",
+        system_id=system_id,
     )
     db.session.add(session)
     db.session.commit()
@@ -197,7 +235,10 @@ def upload():
         return redirect(url_for("main.index"))
 
     # --- Step 3: Item matching ---
-    erp_items = ERPItem.query.all()
+    erp_items = item_matcher.get_catalog_for_system(
+        session.system_id,
+        fallback_to_global=current_app.config.get("BRANCH_MATCH_FALLBACK_GLOBAL", True),
+    )
     descriptions = [item["description"] for item in parsed_items]
     threshold = current_app.config["CONFIDENCE_THRESHOLD"]
 
@@ -445,32 +486,39 @@ def catalog():
 
 @main.route("/catalog/upload", methods=["POST"])
 def catalog_upload():
-    """Upload a CSV file to populate the ERP item catalog."""
+    """Upload raw ERP export (xlsx/csv) or processed catalog CSV and refresh index."""
     if "file" not in request.files:
         flash("No file provided.", "error")
         return redirect(url_for("main.catalog"))
 
     file = request.files["file"]
-    if not file.filename or not file.filename.lower().endswith(".csv"):
-        flash("Please upload a CSV file.", "error")
+    filename = (file.filename or "").lower()
+    if not file.filename or not filename.endswith((".csv", ".xlsx", ".xls")):
+        flash("Please upload a CSV or Excel file.", "error")
         return redirect(url_for("main.catalog"))
 
     try:
-        df = pd.read_csv(file)
+        incoming = _read_catalog_upload(file)
     except Exception as exc:
-        flash(f"Could not parse CSV: {exc}", "error")
+        flash(f"Could not parse catalog file: {exc}", "error")
         return redirect(url_for("main.catalog"))
 
-    # Normalise column names to lowercase
-    df.columns = df.columns.str.lower()
+    incoming = normalise_input_columns(incoming)
 
-    if "sku" in df.columns and "item_code" not in df.columns:
-        df.rename(columns={"sku": "item_code"}, inplace=True)
+    try:
+        if looks_like_raw_file(incoming):
+            df = preprocess_raw_catalog(incoming)
+            df = df.rename(columns={"sku": "item_code"})
+        else:
+            df = incoming
+    except CatalogValidationError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("main.catalog"))
 
     required_cols = {"item_code", "description"}
     missing = required_cols - set(df.columns)
     if missing:
-        flash(f"CSV is missing required columns: {', '.join(missing)}", "error")
+        flash(f"Catalog is missing required columns: {', '.join(sorted(missing))}", "error")
         return redirect(url_for("main.catalog"))
 
     replace_all = request.form.get("replace_all") == "1"
@@ -478,15 +526,13 @@ def catalog_upload():
         ERPItem.query.delete()
         db.session.commit()
 
-    # Build a list of valid rows first
     valid_rows = []
     for _, row in df.iterrows():
-        code = str(row["item_code"]).strip()
-        desc = str(row["description"]).strip()
+        code = str(row.get("item_code", "")).strip()
+        desc = str(row.get("description", "")).strip()
         if code and desc:
             valid_rows.append((code, row))
 
-    # Load all existing items in one query instead of N per-row SELECTs
     all_codes = [code for code, _ in valid_rows]
     existing_map = {}
     if all_codes:
@@ -497,62 +543,58 @@ def catalog_upload():
 
     added = 0
     updated = 0
-    _CHUNK = 500  # flush to DB in chunks to keep transaction memory bounded
-    for i, (code, row) in enumerate(valid_rows):
-        desc = str(row["description"]).strip()
+    for code, row in valid_rows:
         existing = existing_map.get(code)
+        payload = {
+            "description": str(row.get("description", "")).strip(),
+            "keywords": str(row.get("keywords", "")).strip(),
+            "category": str(row.get("category", row.get("major_description", ""))).strip(),
+            "material_category": str(row.get("material_category", row.get("major_description", ""))).strip(),
+            "size": str(row.get("size", "")).strip(),
+            "length": str(row.get("length", "")).strip(),
+            "brand": str(row.get("brand", "")).strip(),
+            "normalized_name": str(row.get("normalized_name", "")).strip(),
+            "unit_of_measure": str(row.get("unit_of_measure", "EA")).strip(),
+            "branch_system_id": str(row.get("branch_system_id", row.get("system_id", ""))).strip(),
+            "ext_description": str(row.get("ext_description", "")).strip(),
+            "major_description": str(row.get("major_description", "")).strip(),
+            "minor_description": str(row.get("minor_description", "")).strip(),
+            "keyword_user_defined": str(row.get("keyword_user_defined", "")).strip(),
+            "ai_match_text": str(row.get("ai_match_text", "")).strip(),
+            "last_sold_date": str(row.get("last_sold_date", "")).strip(),
+            "days_since_last_sold": row.get("days_since_last_sold") if pd.notna(row.get("days_since_last_sold")) else None,
+            "sold_recency_bucket": str(row.get("sold_recency_bucket", "unknown")).strip() or "unknown",
+            "sold_weight": float(row.get("sold_weight", 0.25) or 0.25),
+        }
+
         if existing:
-            existing.description = desc
-            existing.keywords = str(row.get("keywords", "")).strip()
-            existing.category = str(row.get("category", "")).strip()
-            existing.material_category = str(row.get("material_category", "")).strip()
-            existing.size = str(row.get("size", "")).strip()
-            existing.length = str(row.get("length", "")).strip()
-            existing.brand = str(row.get("brand", "")).strip()
-            existing.normalized_name = str(row.get("normalized_name", "")).strip()
-            existing.unit_of_measure = str(row.get("unit_of_measure", "EA")).strip()
-            existing.embedding = None  # invalidate stale embedding
+            for key, val in payload.items():
+                setattr(existing, key, val)
+            existing.embedding = None
             updated += 1
         else:
-            item = ERPItem(
-                item_code=code,
-                description=desc,
-                keywords=str(row.get("keywords", "")).strip(),
-                category=str(row.get("category", "")).strip(),
-                material_category=str(row.get("material_category", "")).strip(),
-                size=str(row.get("size", "")).strip(),
-                length=str(row.get("length", "")).strip(),
-                brand=str(row.get("brand", "")).strip(),
-                normalized_name=str(row.get("normalized_name", "")).strip(),
-                unit_of_measure=str(row.get("unit_of_measure", "EA")).strip(),
-            )
+            item = ERPItem(item_code=code, **payload)
             db.session.add(item)
             added += 1
 
-        # Flush in chunks so the session doesn't accumulate unbounded objects
-        if (i + 1) % _CHUNK == 0:
-            db.session.flush()
-
     db.session.commit()
 
-    # Rebuild vector index for the current catalog
     all_items = ERPItem.query.all()
+    _export_catalog_artifacts()
     try:
         idx = item_matcher.build_index(all_items, current_app.config["EMBEDDING_MODEL"])
         if idx is not None and idx.catalog_refs:
             embed_msg = f" Vector index built for {len(all_items)} items."
         else:
             embed_msg = (
-                " WARNING: vector index is empty — the sentence-transformers model"
-                " may not be loaded. Matching will use fuzzy-only mode until the"
-                " model is available."
+                " WARNING: vector index is empty — sentence-transformers may not be loaded."
             )
     except Exception as exc:
         logger.warning("Vector index build failed: %s", exc)
         embed_msg = " (Vector index will be built on first match.)"
 
     flash(
-        f"Catalog updated: {added} items added, {updated} items updated.{embed_msg}",
+        f"Catalog refreshed: {added} items added, {updated} items updated.{embed_msg}",
         "success",
     )
     return redirect(url_for("main.catalog"))

@@ -405,6 +405,18 @@ def _fuzzy_only_candidates(norm_desc: str, erp_items: list, size, length, k: int
     return scored[:k]
 
 
+
+
+def get_catalog_for_system(system_id: str | None, fallback_to_global: bool = True) -> list[ERPItem]:
+    """Load branch-specific catalog first, then optionally fall back to full catalog."""
+    sid = (system_id or "").strip()
+    if sid:
+        branch_items = ERPItem.query.filter_by(branch_system_id=sid).all()
+        if branch_items:
+            return branch_items
+        if not fallback_to_global:
+            return []
+    return ERPItem.query.all()
 def _no_match():
     return {
         "matched_item_code": None,

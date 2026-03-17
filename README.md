@@ -64,26 +64,29 @@ The SQLite database is created automatically at `data/app.db` on first run.
 ## Loading the ERP Catalog
 
 1. Navigate to **ERP Catalog** in the top nav
-2. Click **Upload & Index** with your CSV file
-3. The system computes embeddings for all items immediately
+2. Click **Upload & Index** with your CSV/XLSX file
+3. Raw ERP exports are validated + preprocessed into AI-ready catalog fields
+4. The system computes embeddings for all items immediately
 
-### CSV Format
+### Raw ERP File Format (recommended)
 
-```csv
-item_code,description,keywords,category,unit_of_measure
-POST-6X6-PT,6x6 Pressure Treated Post 10ft,"post pt 6x6 10 pressure treated",Lumber,EA
-JOIST-2X10-SPF,2x10 SPF Joist 16ft,"joist 2x10 spf 16",Lumber,EA
-HANGER-LUS210,LUS210 Joist Hanger,"hanger lus210 joist 2x10",Hardware,BX
-TREX-16-SAND,Trex Select Decking 16ft Sandy Tan,"trex composite decking 16 sand",Decking,LF
-```
+Upload `stock items to parse.xlsx` (or equivalent export) with required columns:
+`item`, `description`, `size_`, `ext_description`, `major_description`, `minor_description`,
+`keyword_string`, `keyword_user_defined`, `last_sold_date`, `system_id`.
 
-- **item_code** (required) — unique ERP code
-- **description** (required) — full item name
-- **keywords** (optional) — extra search terms, comma or space separated
-- **category** (optional) — grouping (Lumber, Hardware, Decking, etc.)
-- **unit_of_measure** (optional, defaults to EA)
+The app preprocesses this into AI-friendly fields like `ai_match_text`, `normalized_name`,
+`keywords`, `days_since_last_sold`, `sold_weight`, and `branch_system_id`.
 
-An example file is included at `example_catalog.csv`.
+### Processed Catalog Format (also accepted)
+
+You can still upload a prepared catalog with at minimum:
+- `item_code`
+- `description`
+
+Optional fields include `keywords`, `material_category`, `size`, `length`, `normalized_name`,
+`ai_match_text`, and `branch_system_id`.
+
+An example starter file is included at `example_catalog.csv`.
 
 ---
 
@@ -199,3 +202,8 @@ Output: [
 The matcher now combines: vector similarity (FAISS + sentence-transformers), RapidFuzz string similarity, structured size/length extraction, and feedback-based reranking from historical review outcomes. User review overrides are persisted to an `item_aliases` table so repeated contractor phrasing resolves to the corrected SKU before running semantic search. Every review save also appends a `match_feedback_events` record, which is aggregated by normalized description to boost previously corrected/confirmed SKUs.
 
 CSV catalog uploads can include these optional AI-ready columns in addition to `item_code` and `description`: `material_category`, `size`, `length`, `brand`, `keywords`, `normalized_name`.
+
+
+## SKU Refresh Workflow
+
+See `docs/SKU_REFRESH_WORKFLOW.md` for the full admin workflow and generated artifact layout.
