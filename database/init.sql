@@ -19,14 +19,25 @@
 -- the same data.  Load this table from your ERP CSV export.
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS skus (
-    sku               TEXT        PRIMARY KEY,
-    description       TEXT        NOT NULL DEFAULT '',
-    material_category TEXT        NOT NULL DEFAULT '',
-    size              TEXT        NOT NULL DEFAULT '',
-    length            TEXT        NOT NULL DEFAULT '',
-    brand             TEXT        NOT NULL DEFAULT '',
-    keywords          TEXT        NOT NULL DEFAULT '',
-    normalized_name   TEXT        NOT NULL DEFAULT ''
+    sku                  TEXT        PRIMARY KEY,
+    branch_system_id     TEXT        NOT NULL DEFAULT '',
+    description          TEXT        NOT NULL DEFAULT '',
+    ext_description      TEXT        NOT NULL DEFAULT '',
+    major_description    TEXT        NOT NULL DEFAULT '',
+    minor_description    TEXT        NOT NULL DEFAULT '',
+    material_category    TEXT        NOT NULL DEFAULT '',
+    size                 TEXT        NOT NULL DEFAULT '',
+    length               TEXT        NOT NULL DEFAULT '',
+    brand                TEXT        NOT NULL DEFAULT '',
+    keyword_string       TEXT        NOT NULL DEFAULT '',
+    keyword_user_defined TEXT        NOT NULL DEFAULT '',
+    keywords             TEXT        NOT NULL DEFAULT '',
+    normalized_name      TEXT        NOT NULL DEFAULT '',
+    ai_match_text        TEXT        NOT NULL DEFAULT '',
+    last_sold_date       TEXT        NOT NULL DEFAULT '',
+    days_since_last_sold INTEGER,
+    sold_recency_bucket  TEXT        NOT NULL DEFAULT 'unknown',
+    sold_weight          DOUBLE PRECISION NOT NULL DEFAULT 0.25
 );
 
 -- Full-text search index speeds up keyword queries
@@ -35,6 +46,9 @@ CREATE INDEX IF NOT EXISTS skus_description_idx
 
 CREATE INDEX IF NOT EXISTS skus_normalized_name_idx
     ON skus (normalized_name);
+
+CREATE INDEX IF NOT EXISTS skus_branch_system_id_idx
+    ON skus (branch_system_id);
 
 CREATE INDEX IF NOT EXISTS skus_keywords_idx
     ON skus (keywords);
