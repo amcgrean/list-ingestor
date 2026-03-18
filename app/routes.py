@@ -44,15 +44,16 @@ from app.models import (
     SessionFeedbackEvent,
     User,
 )
+from app.services.catalog_importer import (
+    clean_csv_value as _clean_csv_value,
+    export_catalog_artifacts as _export_catalog_artifacts,
+    import_catalog_dataframe,
+    prepare_catalog_dataframe,
+    prune_orphan_erp_items as _prune_orphan_erp_items,
+)
 from app.services import item_matcher
 from app.services import metrics_service
-from app.services.sku_pipeline import (
-    CatalogValidationError,
-    looks_like_raw_file,
-    normalise_input_columns,
-    preprocess_raw_catalog,
-    write_catalog_outputs,
-)
+from app.services.sku_pipeline import CatalogValidationError
 import sys, os as _os
 # Add project root so services/ package is importable from within the Flask app
 _PROJECT_ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
@@ -128,20 +129,6 @@ def _read_catalog_upload(file) -> pd.DataFrame:
     if filename.endswith((".xlsx", ".xls")):
         return pd.read_excel(file)
     return pd.read_csv(file)
-
-
-def _export_catalog_artifacts() -> None:
-    rows = [item.to_dict() for item in ERPItem.query.order_by(ERPItem.item_code).all()]
-    if not rows:
-        return
-    df = pd.DataFrame(rows)
-    if "item_code" in df.columns and "sku" not in df.columns:
-        df["sku"] = df["item_code"]
-    # Backfill a minimal ai_match_text for legacy rows
-    if "ai_match_text" not in df.columns:
-        df["ai_match_text"] = ""
-    write_catalog_outputs(df, Path(current_app.root_path).parent / "data" / "catalog")
-
 
 
 def _all_branches():
@@ -250,29 +237,6 @@ def _branch_items(branch: Branch | None) -> list[ERPItem]:
     if branch is None:
         return []
     return _branch_items_query(branch).order_by(ERPItem.item_code).all()
-
-
-def _prune_orphan_erp_items():
-    orphans = (
-        ERPItem.query.outerjoin(BranchCatalogItem, BranchCatalogItem.erp_item_id == ERPItem.id)
-        .filter(BranchCatalogItem.id.is_(None))
-        .all()
-    )
-    for item in orphans:
-        db.session.delete(item)
-    if orphans:
-        db.session.commit()
-
-
-def _clean_csv_value(value, max_length: int | None = None) -> str:
-    if value is None or pd.isna(value):
-        return ""
-    cleaned = str(value).strip()
-    if cleaned.lower() == "nan":
-        cleaned = ""
-    if max_length is not None:
-        cleaned = cleaned[:max_length]
-    return cleaned
 
 
 @main.before_app_request
@@ -912,25 +876,36 @@ def catalog_upload():
         return redirect(url_for("main.catalog"))
 
     try:
-        normalized_incoming = normalise_input_columns(incoming)
-        if looks_like_raw_file(incoming):
-            df = preprocess_raw_catalog(incoming)
-            df = df.rename(columns={"sku": "item_code"})
-        else:
-            df = normalized_incoming
-            if "item" in df.columns and "item_code" not in df.columns:
-                df = df.rename(columns={"item": "item_code"})
+        df = prepare_catalog_dataframe(incoming)
     except CatalogValidationError as exc:
         flash(str(exc), "error")
         return redirect(url_for("main.catalog"))
 
-    required_cols = {"item_code", "description"}
-    missing = required_cols - set(df.columns)
-    if missing:
-        flash(f"Catalog is missing required columns: {', '.join(sorted(missing))}", "error")
-        return redirect(url_for("main.catalog"))
-
     replace_all = request.form.get("replace_all") == "1"
+    try:
+        summary = import_catalog_dataframe(
+            branch=branch,
+            df=df,
+            replace_all=replace_all,
+            embedding_model=current_app.config["EMBEDDING_MODEL"],
+            output_dir=Path(current_app.root_path).parent / "data" / "catalog",
+        )
+        if summary["vector_count"]:
+            embed_msg = f" Vector index built for {summary['catalog_count']} items."
+        else:
+            embed_msg = (
+                " WARNING: vector index is empty - sentence-transformers may not be loaded."
+            )
+    except Exception as exc:
+        logger.warning("Vector index build failed: %s", exc)
+        embed_msg = " (Vector index will be built on first match.)"
+
+    flash(
+        f"{branch.code} catalog refreshed: {summary['added']} items added, {summary['updated']} items updated, {summary['linked']} items linked to the branch.{embed_msg}",
+        "success",
+    )
+    return redirect(url_for("main.catalog", branch_id=branch.id))
+
     if replace_all:
         BranchCatalogItem.query.filter_by(branch_id=branch.id).delete()
         db.session.commit()

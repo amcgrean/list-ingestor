@@ -88,6 +88,16 @@ Optional fields include `keywords`, `material_category`, `size`, `length`, `norm
 
 An example starter file is included at `example_catalog.csv`.
 
+### Bulk Branch Import
+
+If you already have per-branch processed catalog CSVs, you can batch import them with:
+
+```bash
+python import_branch_catalogs.py data/catalog/recovered_pi_20260318/branches --replace-all
+```
+
+Expected filenames include `10FD_catalog.csv` or `ai_catalog_system_10FD.csv`.
+
 ---
 
 ## Docker / Production
