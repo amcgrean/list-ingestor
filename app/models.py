@@ -277,7 +277,12 @@ class ProcessingSession(db.Model):
     error_message = db.Column(db.Text, nullable=True)
     system_id = db.Column(db.String(100), default="", index=True)
     session_comment = db.Column(db.Text, nullable=True)
-    feedback_reprocess_requested = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
+    feedback_reprocess_requested = db.Column(
+        db.Boolean,
+        default=False,
+        nullable=False,
+        server_default=db.text("false"),
+    )
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
