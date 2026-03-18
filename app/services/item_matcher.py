@@ -15,8 +15,8 @@ from app.services.size_parser import parse_size_and_length
 from app.services.vector_index import VectorIndex
 
 
-_vector_index: VectorIndex | None = None
-_index_size = 0
+_vector_indexes: dict[str, VectorIndex] = {}
+_index_sizes: dict[str, int] = {}
 _index_lock = threading.Lock()  # guards index build so only one thread rebuilds at a time
 
 import logging as _logging
@@ -30,24 +30,29 @@ def normalise_description(text: str) -> str:
     return re.sub(r"\s+", " ", text)
 
 
-def _ensure_vector_index(erp_items: Iterable[ERPItem], model_name: str) -> VectorIndex:
-    global _vector_index, _index_size
+def _ensure_vector_index(
+    erp_items: Iterable[ERPItem], model_name: str, cache_key: str = "default"
+) -> VectorIndex:
     items = list(erp_items)
+    vector_index = _vector_indexes.get(cache_key)
+    index_size = _index_sizes.get(cache_key, 0)
     # Fast path: check without lock first
-    if _vector_index is not None and _index_size == len(items) and _vector_index.model_name == model_name:
-        return _vector_index
+    if vector_index is not None and index_size == len(items) and vector_index.model_name == model_name:
+        return vector_index
     # Slow path: only one thread builds the index at a time
     with _index_lock:
+        vector_index = _vector_indexes.get(cache_key)
+        index_size = _index_sizes.get(cache_key, 0)
         # Re-check inside the lock in case another thread just built it
-        if _vector_index is None or _index_size != len(items) or _vector_index.model_name != model_name:
+        if vector_index is None or index_size != len(items) or vector_index.model_name != model_name:
             idx = VectorIndex(model_name=model_name)
             idx.build_index(items)
-            _vector_index = idx
+            _vector_indexes[cache_key] = idx
             if idx.catalog_refs:
                 # Only cache as valid when the index actually has content.
                 # If catalog_refs is empty (e.g. model failed to load), leave
                 # _index_size at its previous value so the next request retries.
-                _index_size = len(items)
+                _index_sizes[cache_key] = len(items)
             else:
                 _log.warning(
                     "vector_index_empty: index built for %d items but catalog_refs is empty "
@@ -55,12 +60,25 @@ def _ensure_vector_index(erp_items: Iterable[ERPItem], model_name: str) -> Vecto
                     "Matching will fall back to fuzzy-only.",
                     len(items),
                 )
-    return _vector_index
+    return _vector_indexes[cache_key]
 
 
-def build_index(catalog, model_name: str):
-    idx = _ensure_vector_index(catalog, model_name)
+def build_index(catalog, model_name: str, cache_key: str = "default"):
+    idx = _ensure_vector_index(catalog, model_name, cache_key=cache_key)
     return idx
+
+
+def get_index(cache_key: str = "default") -> VectorIndex | None:
+    return _vector_indexes.get(cache_key)
+
+
+def clear_index(cache_key: str | None = None) -> None:
+    if cache_key is None:
+        _vector_indexes.clear()
+        _index_sizes.clear()
+        return
+    _vector_indexes.pop(cache_key, None)
+    _index_sizes.pop(cache_key, None)
 
 
 def _alias_lookup(description: str):
@@ -169,6 +187,7 @@ def match_item(
     model_name: str,
     fuzzy_weight: float = 0.4,
     vector_weight: float = 0.6,
+    cache_key: str = "default",
 ):
     results = match_item_candidates(
         description,
@@ -177,6 +196,7 @@ def match_item(
         fuzzy_weight=fuzzy_weight,
         vector_weight=vector_weight,
         k=5,
+        cache_key=cache_key,
     )
     if not results:
         return _no_match()
@@ -199,6 +219,7 @@ def match_item_candidates(
     fuzzy_weight: float = 0.4,
     vector_weight: float = 0.6,
     k: int = 5,
+    cache_key: str = "default",
 ):
     if not erp_items:
         return []
@@ -221,7 +242,7 @@ def match_item_candidates(
     size, length = parse_size_and_length(norm_desc)
     feedback_counts = _feedback_counts(norm_desc)
 
-    idx = _ensure_vector_index(erp_items, model_name)
+    idx = _ensure_vector_index(erp_items, model_name, cache_key=cache_key)
     vector_hits = idx.search(norm_desc, k=max(k * 2, 10))
     vector_scores = {hit.sku: hit.score for hit in vector_hits}
 
@@ -259,6 +280,7 @@ def match_items_batch(
     model_name: str,
     fuzzy_weight: float = 0.4,
     vector_weight: float = 0.6,
+    cache_key: str = "default",
 ):
     """Match a batch of descriptions against the catalog.
 
@@ -312,7 +334,7 @@ def match_items_batch(
 
     # Batch-encode all remaining queries in one transformer call
     if needs_vector and erp_items:
-        idx = _ensure_vector_index(erp_items, model_name)
+        idx = _ensure_vector_index(erp_items, model_name, cache_key=cache_key)
         k = 5
         norm_queries = [norm_desc for _, _, norm_desc, _ in needs_vector]
         batch_hits = idx.search_batch(norm_queries, k=max(k * 2, 10))

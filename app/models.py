@@ -160,6 +160,66 @@ class ERPItem(db.Model):
         }
 
 
+class Branch(db.Model):
+    __tablename__ = "branches"
+
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(20), unique=True, nullable=False, index=True)
+    name = db.Column(db.String(100), nullable=False)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "code": self.code,
+            "name": self.name,
+            "is_active": self.is_active,
+        }
+
+
+class User(db.Model):
+    __tablename__ = "users"
+
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    full_name = db.Column(db.String(255), default="")
+    is_admin = db.Column(db.Boolean, default=False, nullable=False)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    default_branch_id = db.Column(db.Integer, db.ForeignKey("branches.id"), nullable=True)
+    last_seen_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    default_branch = db.relationship("Branch", foreign_keys=[default_branch_id])
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "email": self.email,
+            "full_name": self.full_name,
+            "is_admin": self.is_admin,
+            "is_active": self.is_active,
+            "default_branch_id": self.default_branch_id,
+            "default_branch_code": self.default_branch.code if self.default_branch else None,
+        }
+
+
+class BranchCatalogItem(db.Model):
+    __tablename__ = "branch_catalog_items"
+
+    id = db.Column(db.Integer, primary_key=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey("branches.id"), nullable=False, index=True)
+    erp_item_id = db.Column(db.Integer, db.ForeignKey("erp_items.id"), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    branch = db.relationship("Branch", backref=db.backref("catalog_links", cascade="all, delete-orphan"))
+    erp_item = db.relationship("ERPItem", backref=db.backref("branch_links", cascade="all, delete-orphan"))
+
+    __table_args__ = (
+        db.UniqueConstraint("branch_id", "erp_item_id", name="uq_branch_catalog_item"),
+    )
+
+
 class ItemAlias(db.Model):
     """User learned alias-to-SKU mapping from review overrides."""
     __tablename__ = "item_aliases"
@@ -209,6 +269,8 @@ class ProcessingSession(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     filename = db.Column(db.String(255), nullable=False)
     file_type = db.Column(db.String(20), nullable=False)  # jpg/png/pdf
+    branch_id = db.Column(db.Integer, db.ForeignKey("branches.id"), nullable=True, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
     raw_ocr_text = db.Column(db.Text, default="")
     status = db.Column(db.String(50), default="pending")
     # pending / ocr_complete / parsed / matched / reviewed / exported
@@ -220,12 +282,16 @@ class ProcessingSession(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     items = db.relationship("ExtractedItem", backref="session", cascade="all, delete-orphan")
+    branch = db.relationship("Branch")
+    user = db.relationship("User")
 
     def to_dict(self):
         return {
             "id": self.id,
             "filename": self.filename,
             "file_type": self.file_type,
+            "branch_code": self.branch.code if self.branch else None,
+            "user_email": self.user.email if self.user else None,
             "status": self.status,
             "error_message": self.error_message,
             "created_at": self.created_at.isoformat(),

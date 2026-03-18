@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Admin{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>User Administration</h1>
+  <p class="subtitle">Manage allowed users and their default branches. {{ config.BOOTSTRAP_ADMIN_EMAIL }} remains the sole admin.</p>
+</div>
+
+<div class="card">
+  <h2 class="section-title">Create User</h2>
+  <form method="post" class="stack-form">
+    <input type="hidden" name="action" value="create" />
+    <input name="email" type="email" class="search-input auth-input" placeholder="user@company.com" required />
+    <input name="full_name" type="text" class="search-input auth-input" placeholder="Full name (optional)" />
+    <select name="default_branch_id" class="search-input branch-select">
+      {% for branch in branches %}
+      <option value="{{ branch.id }}">{{ branch.code }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-primary">Create User</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2 class="section-title">Existing Users</h2>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Email</th>
+        <th>Name</th>
+        <th>Default Branch</th>
+        <th>Status</th>
+        <th>Admin</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for user in users %}
+      <tr>
+        {% set form_id = 'user-form-' ~ user.id %}
+        <td>{{ user.email }}</td>
+        <td>
+          <input form="{{ form_id }}" type="text" name="full_name" value="{{ user.full_name }}" class="search-input table-input" />
+        </td>
+        <td>
+            <select form="{{ form_id }}" name="default_branch_id" class="search-input table-input">
+              {% for branch in branches %}
+              <option value="{{ branch.id }}" {% if user.default_branch_id == branch.id %}selected{% endif %}>{{ branch.code }}</option>
+              {% endfor %}
+            </select>
+        </td>
+        <td>
+            <label class="checkbox-label">
+              <input form="{{ form_id }}" type="checkbox" name="is_active" value="1" {% if user.is_active %}checked{% endif %} />
+              Active
+            </label>
+        </td>
+        <td>{{ "Yes" if user.is_admin else "No" }}</td>
+        <td>
+            <form id="{{ form_id }}" method="post">
+              <input type="hidden" name="action" value="update" />
+              <input type="hidden" name="user_id" value="{{ user.id }}" />
+            </form>
+            <button form="{{ form_id }}" type="submit" class="btn btn-sm btn-secondary">Save</button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

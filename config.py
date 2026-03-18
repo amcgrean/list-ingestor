@@ -35,6 +35,20 @@ class Config:
     OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
     OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
 
+    # Authentication / tenancy
+    CLOUDFLARE_ACCESS_EMAIL_HEADER = os.environ.get(
+        "CLOUDFLARE_ACCESS_EMAIL_HEADER", "Cf-Access-Authenticated-User-Email"
+    )
+    ALLOW_LOCAL_LOGIN = os.environ.get("ALLOW_LOCAL_LOGIN", "true").lower() == "true"
+    DEFAULT_BRANCH_CODES = [
+        code.strip()
+        for code in os.environ.get("DEFAULT_BRANCH_CODES", "10FD,20GR,25BW,40CV").split(",")
+        if code.strip()
+    ]
+    BOOTSTRAP_ADMIN_EMAIL = os.environ.get(
+        "BOOTSTRAP_ADMIN_EMAIL", "amcgrean@beisserlumber.com"
+    ).strip().lower()
+
     # AI provider used for parsing: "claude" or "openai"
     # Can be overridden per-upload via the upload form.
     DEFAULT_AI_PROVIDER = os.environ.get("DEFAULT_AI_PROVIDER", "claude")

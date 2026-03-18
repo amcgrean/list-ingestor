@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Sign In{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Sign In</h1>
+  <p class="subtitle">Cloudflare Access will sign users in automatically when available. This local sign-in is a fallback for approved users.</p>
+</div>
+
+<div class="card auth-card">
+  <form method="post" class="stack-form">
+    <label for="email" class="provider-label">Email</label>
+    <input id="email" name="email" type="email" list="known-users" class="search-input auth-input" placeholder="you@example.com" required />
+    <datalist id="known-users">
+      {% for user in users %}
+      <option value="{{ user.email }}"></option>
+      {% endfor %}
+    </datalist>
+    <button type="submit" class="btn btn-primary">Sign In</button>
+  </form>
+</div>
+{% endblock %}

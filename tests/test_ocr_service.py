@@ -26,7 +26,12 @@ from PIL import Image
 _SERVICE_PATH = Path(__file__).parent.parent / "app" / "services" / "ocr_service.py"
 _spec = importlib.util.spec_from_file_location("ocr_service", _SERVICE_PATH)
 ocr_service = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(ocr_service)
+try:
+    _spec.loader.exec_module(ocr_service)
+except ModuleNotFoundError as exc:
+    if exc.name == "pytesseract":
+        raise unittest.SkipTest("Deprecated OCR service requires optional pytesseract dependency")
+    raise
 
 sys.modules.setdefault("ocr_service", ocr_service)
 

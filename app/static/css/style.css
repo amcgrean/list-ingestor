@@ -74,6 +74,23 @@ body {
   color: var(--primary);
   border-color: var(--primary);
 }
+.nav-meta {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+}
+.nav-chip {
+  background: #dbeafe;
+  color: #1d4ed8;
+  border-radius: 999px;
+  padding: .2rem .6rem;
+  font-size: .78rem;
+  font-weight: 700;
+}
+.nav-user {
+  color: var(--gray-500);
+  font-size: .85rem;
+}
 
 /* ---- Layout ---- */
 .main-content {
@@ -214,6 +231,9 @@ body {
 /* ---- AI Provider Selector ---- */
 .provider-selector {
   margin-top: 1.25rem;
+}
+.branch-selector {
+  margin-bottom: 1rem;
 }
 .provider-label {
   display: block;
@@ -420,8 +440,14 @@ body {
 
 /* Catalog page */
 .inline-form { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
+.stack-form { display: flex; flex-direction: column; gap: .75rem; max-width: 420px; }
 .file-input-inline { font-size: .875rem; }
 .checkbox-label { display: flex; align-items: center; gap: .3rem; font-size: .875rem; cursor: pointer; }
+.branch-picker { margin-bottom: 1rem; }
+.branch-select { min-width: 160px; }
+.auth-card { max-width: 520px; }
+.auth-input { width: 100%; }
+.table-input { width: 100%; min-width: 140px; }
 .danger-zone {
   margin-top: 1.25rem;
   padding-top: 1rem;
@@ -458,8 +484,25 @@ body {
 /* Utilities */
 .hidden { display: none !important; }
 
-
 .feedback-panel { margin-top: 1rem; display: grid; gap: .5rem; }
 .feedback-panel textarea { width: 100%; border: 1px solid var(--gray-300); border-radius: var(--radius); padding: .5rem; font-family: inherit; }
 .feedback-actions { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; }
 .col-comment .item-comment { width: 100%; min-width: 170px; }
+
+@media (max-width: 840px) {
+  .nav-inner {
+    height: auto;
+    padding-top: .75rem;
+    padding-bottom: .75rem;
+    flex-wrap: wrap;
+    gap: .75rem;
+  }
+  .nav-links {
+    gap: .9rem;
+    flex-wrap: wrap;
+  }
+  .nav-meta {
+    width: 100%;
+    justify-content: space-between;
+  }
+}

@@ -4,22 +4,41 @@
 {% block content %}
 <div class="page-header">
   <h1>ERP Item Catalog</h1>
-  <p class="subtitle">{{ item_count }} items loaded. Upload raw ERP export (CSV/XLSX) or processed catalog to add/update items.</p>
+  <p class="subtitle">
+    {% if selected_branch %}
+      {{ item_count }} items loaded for branch <strong>{{ selected_branch.code }}</strong>. Upload raw ERP export (CSV/XLSX) or processed catalog to add or update items.
+    {% else %}
+      Select a branch to view its catalog.
+    {% endif %}
+  </p>
 </div>
 
 <!-- Upload card -->
 <div class="card">
+  <form method="get" action="{{ url_for('main.catalog') }}" class="inline-form branch-picker">
+    <label for="catalog-branch" class="provider-label">Branch</label>
+    <select id="catalog-branch" name="branch_id" class="search-input branch-select" onchange="this.form.submit()">
+      {% for branch in branches %}
+      <option value="{{ branch.id }}" {% if selected_branch and branch.id == selected_branch.id %}selected{% endif %}>
+        {{ branch.code }}
+      </option>
+      {% endfor %}
+    </select>
+  </form>
+
   <h2 class="section-title">Upload / Refresh Catalog</h2>
   <p class="help-text">
     Raw ERP required columns: <code>item</code>, <code>description</code>, <code>size_</code>, <code>ext_description</code>, <code>major_description</code>, <code>minor_description</code>, <code>keyword_string</code>, <code>keyword_user_defined</code>, <code>last_sold_date</code>, <code>system_id</code><br />
-    Processed file minimum: <code>item_code</code>, <code>description</code>
+    Processed file minimum: <code>item_code</code>, <code>description</code><br />
+    Uploads apply only to the selected branch.
   </p>
   <form action="{{ url_for('main.catalog_upload') }}" method="post" enctype="multipart/form-data">
     <div class="inline-form">
+      <input type="hidden" name="branch_id" value="{{ selected_branch.id if selected_branch else '' }}" />
       <input type="file" name="file" accept=".csv,.xlsx,.xls" required class="file-input-inline" />
       <label class="checkbox-label">
         <input type="checkbox" name="replace_all" value="1" />
-        Replace entire catalog
+        Replace {{ selected_branch.code if selected_branch else 'branch' }} catalog
       </label>
       <button type="submit" class="btn btn-primary">Upload &amp; Index</button>
     </div>
@@ -28,8 +47,9 @@
   {% if item_count > 0 %}
   <div class="danger-zone">
     <form action="{{ url_for('main.catalog_delete') }}" method="post"
-          onsubmit="return confirm('Delete all {{ item_count }} catalog items? This cannot be undone.')">
-      <button type="submit" class="btn btn-danger btn-sm">Clear Entire Catalog</button>
+          onsubmit="return confirm('Delete all {{ item_count }} items for branch {{ selected_branch.code if selected_branch else '' }}? This cannot be undone.')">
+      <input type="hidden" name="branch_id" value="{{ selected_branch.id if selected_branch else '' }}" />
+      <button type="submit" class="btn btn-danger btn-sm">Clear Branch Catalog</button>
     </form>
   </div>
   {% endif %}
@@ -39,9 +59,10 @@
 <div class="card">
   <div class="catalog-toolbar">
     <form method="get" action="{{ url_for('main.catalog') }}" class="search-form">
+      <input type="hidden" name="branch_id" value="{{ selected_branch.id if selected_branch else '' }}" />
       <input type="text" name="q" value="{{ q }}" placeholder="Search item code or description…" class="search-input" />
       <button type="submit" class="btn btn-sm btn-secondary">Search</button>
-      {% if q %}<a href="{{ url_for('main.catalog') }}" class="btn btn-sm btn-outline">Clear</a>{% endif %}
+      {% if q %}<a href="{{ url_for('main.catalog', branch_id=selected_branch.id if selected_branch else None) }}" class="btn btn-sm btn-outline">Clear</a>{% endif %}
     </form>
   </div>
 
@@ -72,11 +93,11 @@
   <!-- Pagination -->
   <div class="pagination">
     {% if pagination.has_prev %}
-      <a class="btn btn-sm btn-outline" href="{{ url_for('main.catalog', page=pagination.prev_num, q=q) }}">&laquo; Prev</a>
+      <a class="btn btn-sm btn-outline" href="{{ url_for('main.catalog', branch_id=selected_branch.id if selected_branch else None, page=pagination.prev_num, q=q) }}">&laquo; Prev</a>
     {% endif %}
     <span class="page-info">Page {{ pagination.page }} of {{ pagination.pages }}</span>
     {% if pagination.has_next %}
-      <a class="btn btn-sm btn-outline" href="{{ url_for('main.catalog', page=pagination.next_num, q=q) }}">Next &raquo;</a>
+      <a class="btn btn-sm btn-outline" href="{{ url_for('main.catalog', branch_id=selected_branch.id if selected_branch else None, page=pagination.next_num, q=q) }}">Next &raquo;</a>
     {% endif %}
   </div>
 
@@ -85,7 +106,7 @@
     {% if q %}
       No items match &ldquo;{{ q }}&rdquo;.
     {% else %}
-      No catalog items yet. Upload a CSV above to get started.
+      No catalog items yet for this branch. Upload a CSV above to get started.
     {% endif %}
   </div>
   {% endif %}
@@ -97,5 +118,11 @@
   <pre class="code-block">item,description,size_,ext_description,major_description,minor_description,keyword_string,keyword_user_defined,last_sold_date,system_id
 POST-6X6-PT,6x6 Pressure Treated Post 10ft,6x6,treated #2 southern pine,lumber,posts,post treated 6x6,ground-contact,2026-02-12,BR01
 JOIST-2X10-16,2x10 PT 16,2x10,pressure treated joist,lumber,framing,joist 2x10 16,treated deck framing,2026-01-02,BR02</pre>
+  <h2 class="section-title">Expected Processed Format</h2>
+  <pre class="code-block">item_code,description,keywords,category,unit_of_measure
+POST-6X6-PT,6x6 Pressure Treated Post,post pt 6x6,Lumber,EA
+JOIST-2X10-SPF,2x10 SPF Joist 16ft,joist 2x10 spf 16,Lumber,EA
+HANGER-LUS210,LUS210 Joist Hanger,hanger lus210 joist,Hardware,BX
+TREX-16-SAND,Trex Decking 16ft Sand,trex decking sand composite,Decking,LF</pre>
 </div>
 {% endblock %}

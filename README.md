@@ -96,12 +96,13 @@ An example starter file is included at `example_catalog.csv`.
 
 ```bash
 cp .env.example .env
-# Set ANTHROPIC_API_KEY in .env
+# Set OPENAI_API_KEY, ANTHROPIC_API_KEY, and SECRET_KEY in .env
+# If port 8000 is already in use, set APP_PORT=8001
 
 docker compose up --build
 ```
 
-App runs on http://localhost:8000.
+App runs on `http://localhost:${APP_PORT:-8000}`.
 
 ### Deploy to Render
 

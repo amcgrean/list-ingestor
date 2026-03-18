@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, g
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import inspect, text
 from config import Config
@@ -92,6 +92,63 @@ def _sync_table_columns(model):
     db.session.commit()
 
 
+def _ensure_default_branches(app):
+    from app.models import Branch
+
+    existing = {branch.code: branch for branch in Branch.query.all()}
+    changed = False
+    for code in app.config["DEFAULT_BRANCH_CODES"]:
+        branch = existing.get(code)
+        if branch is None:
+            db.session.add(Branch(code=code, name=code))
+            changed = True
+        elif branch.name != code or not branch.is_active:
+            branch.name = code
+            branch.is_active = True
+            changed = True
+    if changed:
+        db.session.commit()
+
+
+def _ensure_admin_user(app):
+    from app.models import Branch, User
+
+    email = app.config.get("BOOTSTRAP_ADMIN_EMAIL", "").strip().lower()
+    if not email:
+        return
+
+    default_branch = Branch.query.filter_by(code=app.config["DEFAULT_BRANCH_CODES"][0]).first()
+    admin = User.query.filter_by(email=email).first()
+    changed = False
+    if admin is None:
+        admin = User(
+            email=email,
+            full_name="AMC Grean",
+            is_admin=True,
+            is_active=True,
+            default_branch=default_branch,
+        )
+        db.session.add(admin)
+        changed = True
+    else:
+        if not admin.is_admin:
+            admin.is_admin = True
+            changed = True
+        if not admin.is_active:
+            admin.is_active = True
+            changed = True
+        if admin.default_branch is None and default_branch is not None:
+            admin.default_branch = default_branch
+            changed = True
+
+    for user in User.query.filter(User.email != email, User.is_admin.is_(True)).all():
+        user.is_admin = False
+        changed = True
+
+    if changed:
+        db.session.commit()
+
+
 def create_app(config_class=Config):
     _configure_logging()
 
@@ -110,14 +167,39 @@ def create_app(config_class=Config):
     app.register_blueprint(main)
 
     with app.app_context():
-        from app.models import ERPItem, IngesterMetrics, ProcessingSession, ExtractedItem, MatchFeedbackEvent, SessionFeedbackEvent
+        from app.models import (
+            Branch,
+            BranchCatalogItem,
+            ERPItem,
+            ExtractedItem,
+            IngesterMetrics,
+            MatchFeedbackEvent,
+            ProcessingSession,
+            SessionFeedbackEvent,
+            User,
+        )
 
         db.create_all()
-        _sync_table_columns(ERPItem)
-        _sync_table_columns(IngesterMetrics)
-        _sync_table_columns(ProcessingSession)
-        _sync_table_columns(ExtractedItem)
-        _sync_table_columns(MatchFeedbackEvent)
-        _sync_table_columns(SessionFeedbackEvent)
+        for model in (
+            ERPItem,
+            IngesterMetrics,
+            ProcessingSession,
+            ExtractedItem,
+            MatchFeedbackEvent,
+            SessionFeedbackEvent,
+            Branch,
+            User,
+            BranchCatalogItem,
+        ):
+            _sync_table_columns(model)
+        _ensure_default_branches(app)
+        _ensure_admin_user(app)
+
+    @app.context_processor
+    def inject_globals():
+        return {
+            "current_user": getattr(g, "current_user", None),
+            "current_branch": getattr(g, "current_branch", None),
+        }
 
     return app
