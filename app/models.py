@@ -387,7 +387,7 @@ class ExtractedItem(db.Model):
     vector_score = db.Column(db.Float, default=0.0)
 
     # Alternate candidates from the matcher (JSON array, top-5 by confidence)
-    candidates_json = db.Column(db.Text, nullable=True)
+    candidates_json = db.Column(db.Text, nullable=True, server_default="'[]'")
 
     # User edits
     final_quantity = db.Column(db.Float, nullable=True)

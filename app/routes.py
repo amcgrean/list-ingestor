@@ -780,6 +780,8 @@ def save_review(session_id):
 @main.route("/review/<int:session_id>/feedback-workflow", methods=["POST"])
 def feedback_workflow(session_id):
     """Build a suggested reprocessing prompt from user feedback and log the event."""
+    if not _current_user():
+        return jsonify({"error": "Unauthorized"}), 403
     session = ProcessingSession.query.get_or_404(session_id)
     data = request.get_json() or {}
     comment = str(data.get("comment", "")).strip()

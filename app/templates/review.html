@@ -190,7 +190,6 @@
   window.SESSION_ID = {{ session.id }};
   window.SAVE_URL = "{{ url_for('main.save_review', session_id=session.id) }}";
   window.ERP_SEARCH_URL = "{{ url_for('main.api_erp_items', session_id=session.id) }}";
-  window.FEEDBACK_WORKFLOW_URL = "{{ url_for('main.feedback_workflow', session_id=session.id) }}";
   window.REPROCESS_URL = "{{ url_for('main.reprocess_session', session_id=session.id) }}";
 </script>
 <script src="{{ url_for('static', filename='js/review.js') }}"></script>
