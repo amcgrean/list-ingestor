@@ -310,6 +310,18 @@ class ExtractedItem(db.Model):
     quantity = db.Column(db.Float, default=1.0)
     raw_description = db.Column(db.String(500), nullable=False)
 
+    # Parse pipeline metadata
+    parse_stage = db.Column(db.String(50), default="legacy", nullable=True)
+    parse_line_id = db.Column(db.String(64), nullable=True)
+    normalized_description = db.Column(db.String(500), nullable=True)
+    section_header = db.Column(db.String(255), nullable=True)
+    brand = db.Column(db.String(150), nullable=True)
+    color = db.Column(db.String(120), nullable=True)
+    product_family = db.Column(db.String(200), nullable=True)
+    product_type = db.Column(db.String(200), nullable=True)
+    ambiguity_flags = db.Column(db.Text, nullable=True)
+    review_reason = db.Column(db.Text, nullable=True)
+
     # From item matcher
     matched_item_code = db.Column(db.String(100), nullable=True)
     matched_description = db.Column(db.String(500), nullable=True)
@@ -337,6 +349,15 @@ class ExtractedItem(db.Model):
             "id": self.id,
             "quantity": self.effective_quantity(),
             "raw_description": self.raw_description,
+            "parse_stage": self.parse_stage,
+            "normalized_description": self.normalized_description,
+            "section_header": self.section_header,
+            "brand": self.brand,
+            "color": self.color,
+            "product_family": self.product_family,
+            "product_type": self.product_type,
+            "ambiguity_flags": json.loads(self.ambiguity_flags) if self.ambiguity_flags else [],
+            "review_reason": self.review_reason,
             "matched_item_code": self.matched_item_code,
             "matched_description": self.matched_description,
             "confidence_score": round(self.confidence_score, 3),
