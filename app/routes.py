@@ -639,6 +639,7 @@ def upload():
             confidence_score=match["confidence_score"],
             fuzzy_score=match["fuzzy_score"],
             vector_score=match["vector_score"],
+            candidates_json=json.dumps(match.get("candidates", [])),
         )
         db.session.add(extracted)
 
@@ -769,7 +770,11 @@ def save_review(session_id):
 
     session.status = "reviewed"
     db.session.commit()
-    return jsonify({"ok": True})
+
+    response: dict[str, Any] = {"ok": True}
+    if request_reprocess:
+        response["reprocess_url"] = url_for("main.reprocess_session", session_id=session_id)
+    return jsonify(response)
 
 
 @main.route("/review/<int:session_id>/feedback-workflow", methods=["POST"])
@@ -816,6 +821,93 @@ def feedback_workflow(session_id):
 
 
 # ---------------------------------------------------------------------------
+# Reprocess Session
+# ---------------------------------------------------------------------------
+
+@main.route("/review/<int:session_id>/reprocess", methods=["POST"])
+def reprocess_session(session_id):
+    """Re-run item matching against the ERP catalog using updated feedback/aliases."""
+    user = _current_user()
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 403
+
+    session = ProcessingSession.query.get_or_404(session_id)
+    items = ExtractedItem.query.filter_by(session_id=session_id).all()
+    if not items:
+        return jsonify({"error": "No items to reprocess."}), 400
+
+    branch = session.branch
+    erp_items = _branch_items(branch) if branch else []
+    if not erp_items and session.system_id:
+        erp_items = item_matcher.get_catalog_for_system(
+            session.system_id,
+            fallback_to_global=current_app.config.get("BRANCH_MATCH_FALLBACK_GLOBAL", True),
+        )
+    if not erp_items:
+        return jsonify({"error": "No ERP catalog available for this branch."}), 400
+
+    # Combine original upload context with any session feedback comment as extra context
+    upload_ctx = session.upload_context or ""
+    if session.session_comment:
+        upload_ctx = f"{upload_ctx} {session.session_comment}".strip()
+
+    merged_context = normalize_document_context(_load_json_blob(session.extracted_context_json))
+    synced_context_payload = _load_json_blob(session.matched_context_json) or {}
+
+    descriptions = [
+        enrich_description_for_matching(
+            item.raw_description,
+            upload_context=upload_ctx,
+            document_context={
+                **merged_context,
+                "global_material_context": list(
+                    dict.fromkeys(
+                        merged_context.get("global_material_context", [])
+                        + ([synced_context_payload.get("material_context")] if synced_context_payload.get("material_context") else [])
+                    )
+                ),
+                "job_notes": list(
+                    dict.fromkeys(
+                        merged_context.get("job_notes", [])
+                        + ([synced_context_payload.get("job_notes")] if synced_context_payload.get("job_notes") else [])
+                    )
+                ),
+            },
+        )
+        for item in items
+    ]
+
+    try:
+        match_results = item_matcher.match_items_batch(
+            descriptions,
+            erp_items,
+            model_name=current_app.config["EMBEDDING_MODEL"],
+            fuzzy_weight=current_app.config["FUZZY_WEIGHT"],
+            vector_weight=current_app.config["VECTOR_WEIGHT"],
+            cache_key=f"branch:{branch.id}" if branch else "default",
+        )
+    except Exception:
+        logger.exception("Reprocess matching failed for session %d", session_id)
+        return jsonify({"error": "Matching failed during reprocess."}), 500
+
+    for item, match in zip(items, match_results):
+        # Skip items the user already confirmed — don't clobber their work
+        if item.is_confirmed and item.final_item_code:
+            continue
+        item.matched_item_code = match["matched_item_code"]
+        item.matched_description = match["matched_description"]
+        item.confidence_score = match["confidence_score"]
+        item.fuzzy_score = match["fuzzy_score"]
+        item.vector_score = match["vector_score"]
+        item.candidates_json = json.dumps(match.get("candidates", []))
+
+    session.status = "matched"
+    db.session.commit()
+
+    return jsonify({"ok": True, "redirect": url_for("main.review", session_id=session_id)})
+
+
+# ---------------------------------------------------------------------------
 # ERP Item Search (for autocomplete in review)
 # ---------------------------------------------------------------------------
 
@@ -835,10 +927,23 @@ def api_erp_items():
     query = _branch_items_query(branch)
     if q:
         like = f"%{q}%"
+        starts_with = f"{q}%"
         query = query.filter(
             db.or_(ERPItem.item_code.ilike(like), ERPItem.description.ilike(like))
         )
-    items = query.order_by(ERPItem.description).limit(50).all()
+        # Order by relevance: exact item_code match first, then description starts-with, then rest
+        query = query.order_by(
+            db.case(
+                (ERPItem.item_code.ilike(q), 0),
+                (ERPItem.description.ilike(starts_with), 1),
+                (ERPItem.item_code.ilike(starts_with), 2),
+                else_=3,
+            ),
+            ERPItem.description,
+        )
+    else:
+        query = query.order_by(ERPItem.description)
+    items = query.limit(25).all()
     return jsonify([item.to_dict() for item in items])
 
 
