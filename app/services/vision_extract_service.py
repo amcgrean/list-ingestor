@@ -10,8 +10,6 @@ from typing import Any
 import pandas as pd
 from openai import OpenAI
 
-from services.openai_vision import extract_items_from_image as legacy_extract
-
 logger = logging.getLogger(__name__)
 
 
@@ -23,6 +21,14 @@ _STAGE_A_PROMPT = (
     "Each line must include: line_id, raw_text, section_header, section_type, quantity_raw, quantity, "
     "dimensions_raw, length, width, height, unit, indentation_level, bullet_style, source_page, source_order, "
     "confidence, unresolved_tokens."
+)
+
+_LEGACY_PROMPT = (
+    "You are reading a contractor material list from a photo or PDF. "
+    "Extract each line item with quantity and description. "
+    "Return ONLY a JSON array with no surrounding markdown. "
+    "Each element must have quantity (number) and description (string). "
+    "Use quantity=1 when missing and preserve material measurements/sizes."
 )
 
 
@@ -37,7 +43,7 @@ class VisionExtractService:
             return self._extract_csv(file_path)
 
         if not self.api_key:
-            return self._legacy_extract(file_path)
+            raise RuntimeError("OPENAI_API_KEY is not configured for image/pdf parsing.")
 
         client = OpenAI(api_key=self.api_key)
         content = self._build_content(file_path)
@@ -50,35 +56,36 @@ class VisionExtractService:
             lines = parsed.get("lines", parsed if isinstance(parsed, list) else [])
             normalized = [self._normalize_line(idx, line) for idx, line in enumerate(lines, start=1)]
             return [line for line in normalized if line["raw_text"]]
-        except Exception:
-            logger.exception("Stage A extraction failed, falling back to legacy extraction")
-            return self._legacy_extract(file_path)
+        except Exception as exc:
+            logger.exception("Stage A extraction failed")
+            raise RuntimeError(f"Stage A extraction failed: {exc}") from exc
 
-    def _legacy_extract(self, file_path: Path) -> list[dict[str, Any]]:
-        items = legacy_extract(file_path, api_key=self.api_key, model=self.model)
+    def extract_legacy_items(self, file_path: Path) -> list[dict[str, Any]]:
+        if file_path.suffix.lower() == ".csv":
+            return [{"quantity": row["quantity"], "description": row["raw_text"]} for row in self._extract_csv(file_path)]
+        if not self.api_key:
+            raise RuntimeError("OPENAI_API_KEY is not configured for image/pdf parsing.")
+
+        client = OpenAI(api_key=self.api_key)
+        content = self._build_content(file_path)
+        response = client.responses.create(
+            model=self.model,
+            input=[{"role": "user", "content": [{"type": "input_text", "text": _LEGACY_PROMPT}, content]}],
+        )
+        parsed = _extract_json(response.output_text)
+        rows = parsed if isinstance(parsed, list) else parsed.get("items", [])
         out: list[dict[str, Any]] = []
-        for idx, item in enumerate(items, start=1):
-            out.append(
-                {
-                    "line_id": f"L{idx}",
-                    "raw_text": item.get("description", ""),
-                    "section_header": "",
-                    "section_type": "item",
-                    "quantity_raw": str(item.get("quantity", "1")),
-                    "quantity": float(item.get("quantity", 1) or 1),
-                    "dimensions_raw": "",
-                    "length": "",
-                    "width": "",
-                    "height": "",
-                    "unit": "",
-                    "indentation_level": 0,
-                    "bullet_style": "",
-                    "source_page": 1,
-                    "source_order": idx,
-                    "confidence": 0.6,
-                    "unresolved_tokens": [],
-                }
-            )
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            desc = str(row.get("description", "")).strip()
+            if not desc:
+                continue
+            try:
+                qty = float(row.get("quantity", 1) or 1)
+            except (TypeError, ValueError):
+                qty = 1.0
+            out.append({"quantity": qty, "description": desc})
         return out
 
     def _extract_csv(self, file_path: Path) -> list[dict[str, Any]]:

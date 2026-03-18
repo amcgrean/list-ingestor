@@ -54,12 +54,7 @@ from app.services.sku_pipeline import (
     write_catalog_outputs,
 )
 from app.services.parse_pipeline import parse_uploads
-from services.openai_vision import extract_items_from_image as _vision_extract
-import sys, os as _os
-# Add project root so services/ package is importable from within the Flask app
-_PROJECT_ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
-if _PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, _PROJECT_ROOT)
+from app.services.vision_extract_service import VisionExtractService
 
 logger = logging.getLogger(__name__)
 main = Blueprint("main", __name__)
@@ -496,18 +491,9 @@ def upload():
                 logger.exception("Context pipeline failed; falling back to legacy single-pass parsing")
 
         if not parsed_items:
+            legacy_vision = VisionExtractService(api_key=api_key, model=current_app.config["OPENAI_MODEL"])
             for _, file_path in saved_uploads:
-                ext = file_path.suffix.lstrip(".").lower()
-                if ext == "csv":
-                    parsed_items.extend(parse_csv_items(file_path))
-                    continue
-                if not api_key:
-                    raise RuntimeError("OPENAI_API_KEY is not configured for image/pdf parsing.")
-                parsed_items.extend(_vision_extract(
-                    file_path,
-                    api_key=api_key,
-                    model=current_app.config["OPENAI_MODEL"],
-                ))
+                parsed_items.extend(legacy_vision.extract_legacy_items(file_path))
             parse_stage_label = "legacy"
 
         ai_ms = int((time.perf_counter() - t0) * 1000)
