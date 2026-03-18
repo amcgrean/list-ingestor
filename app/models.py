@@ -386,6 +386,9 @@ class ExtractedItem(db.Model):
     fuzzy_score = db.Column(db.Float, default=0.0)
     vector_score = db.Column(db.Float, default=0.0)
 
+    # Alternate candidates from the matcher (JSON array, top-5 by confidence)
+    candidates_json = db.Column(db.Text, nullable=True, server_default="'[]'")
+
     # User edits
     final_quantity = db.Column(db.Float, nullable=True)
     final_item_code = db.Column(db.String(100), nullable=True)
@@ -397,6 +400,19 @@ class ExtractedItem(db.Model):
 
     def effective_item_code(self):
         return self.final_item_code or self.matched_item_code
+
+    @property
+    def erp_description(self):
+        """Return the human-readable ERP description for the currently matched/final item.
+
+        Uses the stored matched_description when no user override exists to avoid
+        an extra DB query per row on the review page.
+        """
+        if self.final_item_code and self.final_item_code != self.matched_item_code:
+            erp = ERPItem.query.filter_by(item_code=self.final_item_code).first()
+            if erp:
+                return erp.description
+        return self.matched_description or ""
 
     def to_dict(self):
         erp_item = None
