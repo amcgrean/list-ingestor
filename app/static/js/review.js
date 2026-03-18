@@ -1,4 +1,4 @@
-/* Review page — save, autocomplete, checkbox logic */
+/* Review page — save, autocomplete, checkbox logic, reprocess */
 (function () {
   const saveBtn        = document.getElementById("save-btn");
   const saveStatus     = document.getElementById("save-status");
@@ -8,13 +8,13 @@
   const rawText        = document.getElementById("raw-text");
   const sessionComment = document.getElementById("session-comment");
   const requestReprocess = document.getElementById("request-reprocess");
-  const feedbackWorkflowBtn = document.getElementById("feedback-workflow-btn");
-  const feedbackContext = document.getElementById("feedback-context");
+  const reprocessBtn   = document.getElementById("reprocess-btn");
+  const reprocessStatus = document.getElementById("reprocess-status");
 
   if (toggleRawBtn && rawText) {
     toggleRawBtn.addEventListener("click", () => {
       const hidden = rawText.classList.toggle("hidden");
-      toggleRawBtn.textContent = hidden ? "Show Raw OCR Text" : "Hide Raw OCR Text";
+      toggleRawBtn.textContent = hidden ? "Show Extracted Text" : "Hide Extracted Text";
     });
   }
 
@@ -33,50 +33,61 @@
     return items;
   }
 
-  saveBtn.addEventListener("click", () => {
+  // Save current edits and return a promise resolving to the response JSON
+  function doSave(requestReprocessFlag) {
     const payload = {
       items: collectItems(),
       session_comment: sessionComment ? sessionComment.value.trim() : "",
-      request_reprocess: requestReprocess ? requestReprocess.checked : false,
+      request_reprocess: requestReprocessFlag,
     };
-    saveBtn.disabled = true;
-    saveStatus.textContent = "Saving…";
-
-    fetch(window.SAVE_URL, {
+    return fetch(window.SAVE_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-    })
-      .then((r) => r.json())
+    }).then((r) => r.json());
+  }
+
+  saveBtn.addEventListener("click", () => {
+    saveBtn.disabled = true;
+    saveStatus.textContent = "Saving…";
+    doSave(requestReprocess ? requestReprocess.checked : false)
       .then((data) => {
-        saveStatus.textContent = data.ok ? "Saved!" : "Save failed.";
-        if (data.ok) setTimeout(() => (saveStatus.textContent = ""), 2500);
+        if (data.ok) {
+          saveStatus.textContent = "Saved!";
+          setTimeout(() => (saveStatus.textContent = ""), 2500);
+        } else {
+          saveStatus.textContent = "Save failed.";
+        }
       })
       .catch(() => { saveStatus.textContent = "Network error."; })
       .finally(() => { saveBtn.disabled = false; });
   });
 
-  if (feedbackWorkflowBtn) {
-    feedbackWorkflowBtn.addEventListener("click", () => {
-      const comment = sessionComment ? sessionComment.value.trim() : "";
-      if (!comment) {
-        alert("Please add session feedback before generating reprocess context.");
-        return;
-      }
-      fetch(window.FEEDBACK_WORKFLOW_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ comment }),
-      })
+  // "Save & Reprocess" button — saves then runs the reprocess endpoint
+  if (reprocessBtn) {
+    reprocessBtn.addEventListener("click", () => {
+      reprocessBtn.disabled = true;
+      reprocessStatus.textContent = "Saving changes…";
+      reprocessStatus.classList.remove("hidden");
+
+      doSave(true)
+        .then((saveData) => {
+          if (!saveData.ok) throw new Error("Save failed");
+          reprocessStatus.textContent = "Re-running item matching with your feedback…";
+          return fetch(window.REPROCESS_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+          });
+        })
         .then((r) => r.json())
         .then((data) => {
-          if (!data.ok) throw new Error(data.error || "failed");
-          feedbackContext.textContent = data.suggested_prompt;
-          feedbackContext.classList.remove("hidden");
+          if (!data.ok) throw new Error(data.error || "Reprocess failed");
+          reprocessStatus.textContent = "Done! Reloading updated results…";
+          window.location.href = data.redirect || window.location.href;
         })
-        .catch(() => {
-          feedbackContext.textContent = "Could not generate reprocess context.";
-          feedbackContext.classList.remove("hidden");
+        .catch((err) => {
+          reprocessStatus.textContent = "Error: " + err.message;
+          reprocessBtn.disabled = false;
         });
     });
   }
@@ -115,7 +126,10 @@
     results.forEach((item) => {
       const div = document.createElement("div");
       div.className = "autocomplete-item";
-      div.innerHTML = `<span class="ac-code">${item.item_code}</span><span class="ac-desc">${item.description}</span>`;
+      const conf = item.confidence_score != null
+        ? ` <span style="color:#9ca3af;font-size:0.8em">${Math.round(item.confidence_score * 100)}%</span>`
+        : "";
+      div.innerHTML = `<span class="ac-code">${item.item_code}</span><span class="ac-desc">${item.description}</span>${conf}`;
       div.addEventListener("mousedown", (e) => {
         e.preventDefault();
         selectItem(row, item);
@@ -136,12 +150,37 @@
     descInput.dataset.currentCode = item.item_code;
   }
 
+  // Parse stored candidates from data-candidates attribute on the row
+  function getCandidates(row) {
+    try {
+      const raw = row.dataset.candidates;
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      // Normalize: matcher returns {sku, description, confidence_score, ...}
+      // api_erp_items returns {item_code, description, ...}
+      return parsed.map((c) => ({
+        item_code: c.item_code || c.sku || "",
+        description: c.description || "",
+        confidence_score: c.confidence_score,
+      }));
+    } catch (_) {
+      return [];
+    }
+  }
+
   document.querySelectorAll(".desc-input").forEach((input) => {
     const row = input.closest(".item-row");
     const dropdown = row.querySelector(".autocomplete-dropdown");
 
     input.addEventListener("focus", () => {
-      if (input.value.trim()) triggerSearch(input.value.trim(), dropdown, row);
+      const q = input.value.trim();
+      // First try to show stored candidates so the user sees top matches immediately
+      const stored = getCandidates(row);
+      if (stored.length) {
+        buildDropdown(dropdown, stored, row);
+      } else if (q) {
+        triggerSearch(q, dropdown, row);
+      }
     });
 
     input.addEventListener("input", () => {
@@ -182,7 +221,8 @@
   });
 
   function triggerSearch(q, dropdown, row) {
-    fetch(`${window.ERP_SEARCH_URL}?q=${encodeURIComponent(q)}`)
+    const sessionId = window.SESSION_ID || "";
+    fetch(`${window.ERP_SEARCH_URL}?q=${encodeURIComponent(q)}&session_id=${sessionId}`)
       .then((r) => r.json())
       .then((data) => buildDropdown(dropdown, data, row))
       .catch(() => dropdown.classList.add("hidden"));

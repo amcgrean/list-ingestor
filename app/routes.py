@@ -60,6 +60,7 @@ from app.services.upload_context import (
     merge_document_contexts,
     normalize_document_context,
 )
+from app.services.parse_pipeline import parse_uploads
 from app.services.sku_pipeline import CatalogValidationError
 import sys, os as _os
 # Add project root so services/ package is importable from within the Flask app
@@ -441,25 +442,84 @@ def upload():
     # --- Step 1: parse each upload ---
     api_key = current_app.config.get("OPENAI_API_KEY", "")
     t0 = time.perf_counter()
-    parsed_items = []
-    document_contexts = []
+    parsed_items: list[dict[str, Any]] = []
+    document_contexts: list[dict[str, Any]] = []
+    parse_stage_label = "legacy"
     try:
-        for _, file_path in saved_uploads:
-            ext = file_path.suffix.lstrip(".").lower()
-            if ext == "csv":
-                parsed_items.extend(parse_csv_items(file_path))
-                continue
+        upload_paths = [path for _, path in saved_uploads]
+        use_context_pipeline = current_app.config.get("ENABLE_CONTEXT_PIPELINE", True)
 
-            if not api_key:
-                raise RuntimeError("OPENAI_API_KEY is not configured for image/pdf parsing.")
+        if use_context_pipeline:
+            try:
+                _, _, stage_c_lines = parse_uploads(
+                    upload_paths,
+                    api_key=api_key,
+                    session_id=session.id,
+                )
+                parsed_items = [
+                    {
+                        "line_id": line.line_id,
+                        "quantity": line.quantity,
+                        "description": line.raw_text,
+                        "raw_text": line.raw_text,
+                        "source_description": line.raw_text,
+                        "applied_context": [value for value in (line.section_header,) if value],
+                        "normalized_description": line.normalized_description,
+                        "section_header": line.section_header,
+                        "brand": line.brand,
+                        "color": line.color,
+                        "product_family": line.product_family,
+                        "product_type": line.product_type,
+                        "ambiguity_flags": line.ambiguity_flags,
+                        "review_reason": line.review_reason,
+                        "needs_review": line.needs_review,
+                        "match_text": line.match_text,
+                    }
+                    for line in stage_c_lines
+                ]
+                parse_stage_label = "context_stage_c"
+            except Exception:
+                if not current_app.config.get("CONTEXT_PIPELINE_FALLBACK_TO_LEGACY", True):
+                    raise
+                logger.exception(
+                    "Context pipeline failed; falling back to legacy single-pass parsing"
+                )
 
-            vision_payload = _vision_extract_document(
-                file_path,
-                api_key=api_key,
-                model=current_app.config["OPENAI_MODEL"],
-            )
-            parsed_items.extend(vision_payload["items"])
-            document_contexts.append(vision_payload["document_context"])
+        if not parsed_items:
+            for _, file_path in saved_uploads:
+                ext = file_path.suffix.lstrip(".").lower()
+                if ext == "csv":
+                    parsed_items.extend(parse_csv_items(file_path))
+                    continue
+
+                if not api_key:
+                    raise RuntimeError("OPENAI_API_KEY is not configured for image/pdf parsing.")
+
+                vision_payload = _vision_extract_document(
+                    file_path,
+                    api_key=api_key,
+                    model=current_app.config["OPENAI_MODEL"],
+                )
+                parsed_items.extend(vision_payload["items"])
+                document_contexts.append(vision_payload["document_context"])
+        elif api_key:
+            for _, file_path in saved_uploads:
+                ext = file_path.suffix.lstrip(".").lower()
+                if ext == "csv":
+                    continue
+                try:
+                    vision_payload = _vision_extract_document(
+                        file_path,
+                        api_key=api_key,
+                        model=current_app.config["OPENAI_MODEL"],
+                    )
+                    document_contexts.append(vision_payload["document_context"])
+                except Exception:
+                    logger.warning(
+                        "Document context extraction failed for %s",
+                        file_path.name,
+                        exc_info=True,
+                    )
 
         ai_ms = int((time.perf_counter() - t0) * 1000)
         merged_context = merge_document_contexts(document_contexts)
@@ -508,7 +568,8 @@ def upload():
             if synced_context_payload.get("job_notes"):
                 raw_text_lines.append(f"Cloud job notes: {synced_context_payload['job_notes']}")
         raw_text_lines.extend(
-            f"{item['quantity']} {item.get('source_description') or item['description']}"
+            f"{item.get('quantity', 1)} "
+            f"{item.get('source_description') or item.get('raw_text') or item.get('description', '')}"
             for item in parsed_items
         )
         session.raw_ocr_text = "\n".join(raw_text_lines)
@@ -570,7 +631,7 @@ def upload():
     synced_context_payload = _load_json_blob(session.matched_context_json)
     descriptions = [
         enrich_description_for_matching(
-            item["description"],
+            item.get("match_text") or item.get("normalized_description") or item["description"],
             upload_context=upload_context,
             document_context={
                 **merged_context,
@@ -624,7 +685,11 @@ def upload():
     fuzzy_scores = [r["fuzzy_score"] for r in match_results]
     vector_scores = [r["vector_score"] for r in match_results]
     items_matched = sum(1 for r in match_results if r["matched_item_code"])
-    items_below = sum(1 for r in match_results if r["confidence_score"] < threshold)
+    items_below = sum(
+        1
+        for parsed, result in zip(parsed_items, match_results)
+        if result["confidence_score"] < threshold or parsed.get("needs_review")
+    )
     avg_conf = sum(confidence_scores) / len(confidence_scores) if confidence_scores else None
     avg_fuzzy = sum(fuzzy_scores) / len(fuzzy_scores) if fuzzy_scores else None
     avg_vec = sum(vector_scores) / len(vector_scores) if vector_scores else None
@@ -633,7 +698,20 @@ def upload():
         extracted = ExtractedItem(
             session_id=session.id,
             quantity=parsed["quantity"],
-            raw_description=parsed["description"],
+            raw_description=parsed.get("source_description")
+            or parsed.get("description")
+            or parsed.get("raw_text")
+            or "",
+            parse_stage=parse_stage_label,
+            parse_line_id=parsed.get("line_id"),
+            normalized_description=parsed.get("normalized_description"),
+            section_header=parsed.get("section_header"),
+            brand=parsed.get("brand"),
+            color=parsed.get("color"),
+            product_family=parsed.get("product_family"),
+            product_type=parsed.get("product_type"),
+            ambiguity_flags=json.dumps(parsed.get("ambiguity_flags", [])),
+            review_reason=parsed.get("review_reason"),
             matched_item_code=match["matched_item_code"],
             matched_description=match["matched_description"],
             confidence_score=match["confidence_score"],
@@ -769,12 +847,18 @@ def save_review(session_id):
 
     session.status = "reviewed"
     db.session.commit()
-    return jsonify({"ok": True})
+
+    response: dict[str, Any] = {"ok": True}
+    if request_reprocess:
+        response["reprocess_url"] = url_for("main.reprocess_session", session_id=session_id)
+    return jsonify(response)
 
 
 @main.route("/review/<int:session_id>/feedback-workflow", methods=["POST"])
 def feedback_workflow(session_id):
     """Build a suggested reprocessing prompt from user feedback and log the event."""
+    if not _current_user():
+        return jsonify({"error": "Unauthorized"}), 403
     session = ProcessingSession.query.get_or_404(session_id)
     data = request.get_json() or {}
     comment = str(data.get("comment", "")).strip()
@@ -799,11 +883,16 @@ def feedback_workflow(session_id):
         ],
     }
 
-    db.session.add(SessionFeedbackEvent(
+    existing_event = SessionFeedbackEvent.query.filter_by(
         session_id=session_id,
         comment=comment,
-        requested_reprocess=True,
-    ))
+    ).first()
+    if not existing_event:
+        db.session.add(SessionFeedbackEvent(
+            session_id=session_id,
+            comment=comment,
+            requested_reprocess=True,
+        ))
     session.session_comment = comment
     session.feedback_reprocess_requested = True
     db.session.commit()
@@ -813,6 +902,92 @@ def feedback_workflow(session_id):
         f"Context JSON: {json.dumps(context_blob)}"
     )
     return jsonify({"ok": True, "suggested_prompt": suggestion, "context": context_blob})
+
+
+# ---------------------------------------------------------------------------
+# Reprocess Session
+# ---------------------------------------------------------------------------
+
+@main.route("/review/<int:session_id>/reprocess", methods=["POST"])
+def reprocess_session(session_id):
+    """Re-run item matching against the ERP catalog using updated feedback/aliases."""
+    user = _current_user()
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 403
+
+    session = ProcessingSession.query.get_or_404(session_id)
+    items = ExtractedItem.query.filter_by(session_id=session_id).all()
+    if not items:
+        return jsonify({"error": "No items to reprocess."}), 400
+
+    branch = session.branch
+    erp_items = _branch_items(branch) if branch else []
+    if not erp_items and session.system_id:
+        erp_items = item_matcher.get_catalog_for_system(
+            session.system_id,
+            fallback_to_global=current_app.config.get("BRANCH_MATCH_FALLBACK_GLOBAL", True),
+        )
+    if not erp_items:
+        return jsonify({"error": "No ERP catalog available for this branch."}), 400
+
+    # Combine original upload context with any session feedback comment as extra context
+    upload_ctx = session.upload_context or ""
+    if session.session_comment:
+        upload_ctx = f"{upload_ctx} {session.session_comment}".strip()
+
+    merged_context = normalize_document_context(_load_json_blob(session.extracted_context_json))
+    synced_context_payload = _load_json_blob(session.matched_context_json) or {}
+
+    descriptions = [
+        enrich_description_for_matching(
+            item.raw_description,
+            upload_context=upload_ctx,
+            document_context={
+                **merged_context,
+                "global_material_context": list(
+                    dict.fromkeys(
+                        merged_context.get("global_material_context", [])
+                        + ([synced_context_payload.get("material_context")] if synced_context_payload.get("material_context") else [])
+                    )
+                ),
+                "job_notes": list(
+                    dict.fromkeys(
+                        merged_context.get("job_notes", [])
+                        + ([synced_context_payload.get("job_notes")] if synced_context_payload.get("job_notes") else [])
+                    )
+                ),
+            },
+        )
+        for item in items
+    ]
+
+    try:
+        match_results = item_matcher.match_items_batch(
+            descriptions,
+            erp_items,
+            model_name=current_app.config["EMBEDDING_MODEL"],
+            fuzzy_weight=current_app.config["FUZZY_WEIGHT"],
+            vector_weight=current_app.config["VECTOR_WEIGHT"],
+            cache_key=f"branch:{branch.id}" if branch else "default",
+        )
+    except Exception:
+        logger.exception("Reprocess matching failed for session %d", session_id)
+        return jsonify({"error": "Matching failed during reprocess."}), 500
+
+    for item, match in zip(items, match_results):
+        # Skip items the user already confirmed — don't clobber their work
+        if item.is_confirmed and item.final_item_code:
+            continue
+        item.matched_item_code = match["matched_item_code"]
+        item.matched_description = match["matched_description"]
+        item.confidence_score = match["confidence_score"]
+        item.fuzzy_score = match["fuzzy_score"]
+        item.vector_score = match["vector_score"]
+
+    session.status = "matched"
+    db.session.commit()
+
+    return jsonify({"ok": True, "redirect": url_for("main.review", session_id=session_id)})
 
 
 # ---------------------------------------------------------------------------
@@ -835,10 +1010,23 @@ def api_erp_items():
     query = _branch_items_query(branch)
     if q:
         like = f"%{q}%"
+        starts_with = f"{q}%"
         query = query.filter(
             db.or_(ERPItem.item_code.ilike(like), ERPItem.description.ilike(like))
         )
-    items = query.order_by(ERPItem.description).limit(50).all()
+        # Order by relevance: exact item_code match first, then description starts-with, then rest
+        query = query.order_by(
+            db.case(
+                (ERPItem.item_code.ilike(q), 0),
+                (ERPItem.description.ilike(starts_with), 1),
+                (ERPItem.item_code.ilike(starts_with), 2),
+                else_=3,
+            ),
+            ERPItem.description,
+        )
+    else:
+        query = query.order_by(ERPItem.description)
+    items = query.limit(25).all()
     return jsonify([item.to_dict() for item in items])
 
 

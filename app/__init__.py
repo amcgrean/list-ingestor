@@ -16,15 +16,17 @@ db = SQLAlchemy()
 # ---------------------------------------------------------------------------
 
 class _JsonFormatter(logging.Formatter):
-    """Emit each log record as a single JSON line.
+    """Emit each log record as a single JSON line."""
 
-    Extra context can be attached per-call with the ``extra`` kwarg, e.g.::
-
-        logger.info("ocr_complete", extra={"session_id": 3, "stage": "ocr", "duration_ms": 421})
-    """
-
-    _KNOWN_EXTRAS = ("session_id", "stage", "duration_ms", "provider", "items",
-                     "error_detail", "ai_provider")
+    _KNOWN_EXTRAS = (
+        "session_id",
+        "stage",
+        "duration_ms",
+        "provider",
+        "items",
+        "error_detail",
+        "ai_provider",
+    )
 
     def format(self, record: logging.LogRecord) -> str:  # type: ignore[override]
         obj: dict = {
@@ -42,16 +44,11 @@ class _JsonFormatter(logging.Formatter):
 
 
 def _configure_logging() -> None:
-    """Replace the root handler with a structured JSON handler on stderr.
-
-    Log level is controlled via the ``LOG_LEVEL`` environment variable
-    (default ``INFO``).  Set to ``DEBUG`` in development for verbose output.
-    """
+    """Replace the root handler with a structured JSON handler on stderr."""
     level_name = os.environ.get("LOG_LEVEL", "INFO").upper()
     level = getattr(logging, level_name, logging.INFO)
 
     root = logging.getLogger()
-    # Remove any handlers added by Flask / Gunicorn before ours
     root.handlers.clear()
 
     handler = logging.StreamHandler(sys.stderr)
@@ -59,7 +56,6 @@ def _configure_logging() -> None:
     root.addHandler(handler)
     root.setLevel(level)
 
-    # Suppress noisy third-party loggers unless we're in DEBUG
     if level > logging.DEBUG:
         for noisy in ("sentence_transformers", "transformers", "faiss", "urllib3"):
             logging.getLogger(noisy).setLevel(logging.WARNING)
@@ -78,15 +74,21 @@ def _sync_table_columns(model):
             continue
 
         column_type = column.type.compile(dialect=db.engine.dialect)
-        # Include server_default so NOT NULL columns can be added to non-empty tables
         if column.server_default is not None:
-            default_sql = column.server_default.arg if hasattr(column.server_default, 'arg') else str(column.server_default)
+            default_sql = (
+                column.server_default.arg
+                if hasattr(column.server_default, "arg")
+                else str(column.server_default)
+            )
             default_clause = f" DEFAULT {default_sql}"
         else:
             default_clause = ""
         nullable_clause = "" if column.nullable else " NOT NULL"
         db.session.execute(
-            text(f"ALTER TABLE {table_name} ADD COLUMN {column.name} {column_type}{default_clause}{nullable_clause}")
+            text(
+                f"ALTER TABLE {table_name} ADD COLUMN {column.name} "
+                f"{column_type}{default_clause}{nullable_clause}"
+            )
         )
 
     db.session.commit()
@@ -117,7 +119,9 @@ def _ensure_admin_user(app):
     if not email:
         return
 
-    default_branch = Branch.query.filter_by(code=app.config["DEFAULT_BRANCH_CODES"][0]).first()
+    default_branch = Branch.query.filter_by(
+        code=app.config["DEFAULT_BRANCH_CODES"][0]
+    ).first()
     admin = User.query.filter_by(email=email).first()
     changed = False
     if admin is None:
@@ -155,7 +159,6 @@ def create_app(config_class=Config):
     app = Flask(__name__, template_folder="templates", static_folder="static")
     app.config.from_object(config_class)
 
-    # Ensure required directories exist
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
     db_uri = app.config["SQLALCHEMY_DATABASE_URI"]
     if db_uri.startswith("sqlite:///"):
@@ -164,6 +167,7 @@ def create_app(config_class=Config):
     db.init_app(app)
 
     from app.routes import main
+
     app.register_blueprint(main)
 
     with app.app_context():

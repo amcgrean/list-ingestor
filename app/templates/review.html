@@ -89,7 +89,8 @@
         <tr class="item-row {% if low_conf %}low-confidence{% endif %} {% if item.is_skipped %}row-skipped{% endif %}"
             data-id="{{ item.id }}"
             data-confirmed="{{ 'true' if item.is_confirmed else 'false' }}"
-            data-skipped="{{ 'true' if item.is_skipped else 'false' }}">
+            data-skipped="{{ 'true' if item.is_skipped else 'false' }}"
+            data-candidates="{{ item.candidates_json or '[]' }}">
 
           <!-- Skip checkbox -->
           <td class="col-skip">
@@ -158,12 +159,12 @@
 
   <div class="feedback-panel">
     <label for="session-comment" class="provider-label">Session feedback / notes</label>
-    <textarea id="session-comment" class="input-sm" rows="3" placeholder="Tell us what was wrong or missing in this pass..."></textarea>
+    <textarea id="session-comment" class="input-sm" rows="3" placeholder="Tell us what was wrong or missing in this pass...">{{ session.session_comment or '' }}</textarea>
     <div class="feedback-actions">
-      <label><input type="checkbox" id="request-reprocess" /> Request AI reprocess with this context</label>
-      <button type="button" class="btn btn-outline btn-sm" id="feedback-workflow-btn">Generate Reprocess Context</button>
+      <label><input type="checkbox" id="request-reprocess" {% if session.feedback_reprocess_requested %}checked{% endif %}/> Re-run matching with this feedback &amp; learned corrections</label>
+      <button type="button" class="btn btn-primary btn-sm" id="reprocess-btn">Save &amp; Reprocess</button>
     </div>
-    <pre id="feedback-context" class="raw-text hidden"></pre>
+    <div id="reprocess-status" class="hidden" style="margin-top:0.5rem;color:#6b7280;font-size:0.85rem;"></div>
   </div>
 
   <!-- Export bar -->
@@ -189,7 +190,7 @@
   window.SESSION_ID = {{ session.id }};
   window.SAVE_URL = "{{ url_for('main.save_review', session_id=session.id) }}";
   window.ERP_SEARCH_URL = "{{ url_for('main.api_erp_items', session_id=session.id) }}";
-  window.FEEDBACK_WORKFLOW_URL = "{{ url_for('main.feedback_workflow', session_id=session.id) }}";
+  window.REPROCESS_URL = "{{ url_for('main.reprocess_session', session_id=session.id) }}";
 </script>
 <script src="{{ url_for('static', filename='js/review.js') }}"></script>
 {% endblock %}
