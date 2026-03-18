@@ -53,12 +53,13 @@ from app.services.sku_pipeline import (
     preprocess_raw_catalog,
     write_catalog_outputs,
 )
+from app.services.parse_pipeline import parse_uploads
+from services.openai_vision import extract_items_from_image as _vision_extract
 import sys, os as _os
 # Add project root so services/ package is importable from within the Flask app
 _PROJECT_ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
-from services.openai_vision import extract_items_from_image as _vision_extract
 
 logger = logging.getLogger(__name__)
 main = Blueprint("main", __name__)
@@ -459,25 +460,59 @@ def upload():
     api_key = current_app.config.get("OPENAI_API_KEY", "")
     t0 = time.perf_counter()
     parsed_items = []
+    stage_b_lines = []
+    stage_c_lines = []
+    parse_stage_label = "legacy"
     try:
-        for _, file_path in saved_uploads:
-            ext = file_path.suffix.lstrip(".").lower()
-            if ext == "csv":
-                parsed_items.extend(parse_csv_items(file_path))
-                continue
+        upload_paths = [path for _, path in saved_uploads]
+        use_context_pipeline = current_app.config.get("ENABLE_CONTEXT_PIPELINE", True)
 
-            if not api_key:
-                raise RuntimeError("OPENAI_API_KEY is not configured for image/pdf parsing.")
+        if use_context_pipeline:
+            try:
+                stage_a_lines, stage_b_lines, stage_c_lines = parse_uploads(upload_paths, api_key=api_key, session_id=session.id)
+                parsed_items = [
+                    {
+                        "line_id": line.line_id,
+                        "quantity": line.quantity,
+                        "description": line.raw_text,
+                        "raw_text": line.raw_text,
+                        "normalized_description": line.normalized_description,
+                        "section_header": line.section_header,
+                        "brand": line.brand,
+                        "color": line.color,
+                        "product_family": line.product_family,
+                        "product_type": line.product_type,
+                        "ambiguity_flags": line.ambiguity_flags,
+                        "review_reason": line.review_reason,
+                        "needs_review": line.needs_review,
+                        "match_text": line.match_text,
+                    }
+                    for line in stage_c_lines
+                ]
+                parse_stage_label = "context_stage_c"
+            except Exception:
+                if not current_app.config.get("CONTEXT_PIPELINE_FALLBACK_TO_LEGACY", True):
+                    raise
+                logger.exception("Context pipeline failed; falling back to legacy single-pass parsing")
 
-            parsed_items.extend(_vision_extract(
-                file_path,
-                api_key=api_key,
-                model=current_app.config["OPENAI_MODEL"],
-            ))
+        if not parsed_items:
+            for _, file_path in saved_uploads:
+                ext = file_path.suffix.lstrip(".").lower()
+                if ext == "csv":
+                    parsed_items.extend(parse_csv_items(file_path))
+                    continue
+                if not api_key:
+                    raise RuntimeError("OPENAI_API_KEY is not configured for image/pdf parsing.")
+                parsed_items.extend(_vision_extract(
+                    file_path,
+                    api_key=api_key,
+                    model=current_app.config["OPENAI_MODEL"],
+                ))
+            parse_stage_label = "legacy"
 
         ai_ms = int((time.perf_counter() - t0) * 1000)
         session.raw_ocr_text = "\n".join(
-            f"{item['quantity']} {item['description']}" for item in parsed_items
+            f"{item.get('quantity', 1)} {item.get('description', '')}" for item in parsed_items
         )
         session.status = "parsed"
         db.session.commit()
@@ -533,7 +568,7 @@ def upload():
             session.system_id,
             fallback_to_global=current_app.config.get("BRANCH_MATCH_FALLBACK_GLOBAL", True),
         )
-    descriptions = [item["description"] for item in parsed_items]
+    descriptions = [item.get("match_text") or item.get("normalized_description") or item["description"] for item in parsed_items]
     threshold = current_app.config["CONFIDENCE_THRESHOLD"]
 
     t0 = time.perf_counter()
@@ -567,7 +602,7 @@ def upload():
     fuzzy_scores = [r["fuzzy_score"] for r in match_results]
     vector_scores = [r["vector_score"] for r in match_results]
     items_matched = sum(1 for r in match_results if r["matched_item_code"])
-    items_below = sum(1 for r in match_results if r["confidence_score"] < threshold)
+    items_below = sum(1 for parsed, r in zip(parsed_items, match_results) if r["confidence_score"] < threshold or parsed.get("needs_review"))
     avg_conf = sum(confidence_scores) / len(confidence_scores) if confidence_scores else None
     avg_fuzzy = sum(fuzzy_scores) / len(fuzzy_scores) if fuzzy_scores else None
     avg_vec = sum(vector_scores) / len(vector_scores) if vector_scores else None
@@ -576,7 +611,17 @@ def upload():
         extracted = ExtractedItem(
             session_id=session.id,
             quantity=parsed["quantity"],
-            raw_description=parsed["description"],
+            raw_description=parsed.get("description") or parsed.get("raw_text") or "",
+            parse_stage=parse_stage_label,
+            parse_line_id=parsed.get("line_id"),
+            normalized_description=parsed.get("normalized_description"),
+            section_header=parsed.get("section_header"),
+            brand=parsed.get("brand"),
+            color=parsed.get("color"),
+            product_family=parsed.get("product_family"),
+            product_type=parsed.get("product_type"),
+            ambiguity_flags=json.dumps(parsed.get("ambiguity_flags", [])),
+            review_reason=parsed.get("review_reason"),
             matched_item_code=match["matched_item_code"],
             matched_description=match["matched_description"],
             confidence_score=match["confidence_score"],

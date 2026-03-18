@@ -139,8 +139,25 @@ All settings are controlled via environment variables (see `.env.example`):
 | `VECTOR_WEIGHT` | `0.6` | Weight for vector similarity |
 | `CONFIDENCE_THRESHOLD` | `0.45` | Scores below this are flagged low-confidence |
 | `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | sentence-transformers model |
+| `OPENAI_MODEL` | `gpt-4o` | Legacy single-pass OpenAI model |
+| `OPENAI_EXTRACTION_MODEL` | `OPENAI_MODEL` | Stage A multimodal extraction model |
+| `OPENAI_CONTEXT_MODEL` | `OPENAI_MODEL` | Stage B context interpretation model |
+| `ENABLE_CONTEXT_PIPELINE` | `true` | Enables Stage A/B/C parsing pipeline before matching |
+| `CONTEXT_PIPELINE_FALLBACK_TO_LEGACY` | `true` | Falls back to legacy single-pass extraction when context pipeline fails |
+| `PARSE_DEBUG_SAVE_JSON` | `false` | Saves stage artifacts (`stage_a_raw_extract.json`, `stage_b_contextualized.json`, `stage_c_match_ready.json`) under `data/parse_debug/session_<id>/` |
 
 ---
+
+
+## Context-Aware Parsing Pipeline
+
+Uploads now support a 3-stage parsing strategy before SKU matching:
+
+1. **Stage A (`app/services/vision_extract_service.py`)**: multimodal extraction from image/PDF/CSV into ordered `RawExtractedLine` records with hierarchy and ambiguity preserved.
+2. **Stage B (`app/services/context_interpreter.py`)**: full-document context pass that applies section headers to child lines, derives normalized descriptions, and flags ambiguity instead of guessing.
+3. **Stage C (`app/services/parse_pipeline.py`)**: converts interpreted lines to `MatchReadyLine` payloads (`match_text`, attributes, `needs_review`) that feed the existing matcher.
+
+The review page and export flow remain unchanged; the app still stores legacy fields (`raw_description`, matched SKU/confidence), while also persisting additional parse metadata for debugging and future UX improvements.
 
 ## Project Structure
 

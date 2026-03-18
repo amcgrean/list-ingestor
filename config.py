@@ -34,6 +34,12 @@ class Config:
     # OpenAI / ChatGPT
     OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
     OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
+    OPENAI_EXTRACTION_MODEL = os.environ.get("OPENAI_EXTRACTION_MODEL", OPENAI_MODEL)
+    OPENAI_CONTEXT_MODEL = os.environ.get("OPENAI_CONTEXT_MODEL", OPENAI_MODEL)
+
+    ENABLE_CONTEXT_PIPELINE = os.environ.get("ENABLE_CONTEXT_PIPELINE", "true").lower() == "true"
+    CONTEXT_PIPELINE_FALLBACK_TO_LEGACY = os.environ.get("CONTEXT_PIPELINE_FALLBACK_TO_LEGACY", "true").lower() == "true"
+    PARSE_DEBUG_SAVE_JSON = os.environ.get("PARSE_DEBUG_SAVE_JSON", "false").lower() == "true"
 
     # Authentication / tenancy
     CLOUDFLARE_ACCESS_EMAIL_HEADER = os.environ.get(
