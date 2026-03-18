@@ -170,6 +170,7 @@ def create_app(config_class=Config):
         from app.models import (
             Branch,
             BranchCatalogItem,
+            CustomerJobContext,
             ERPItem,
             ExtractedItem,
             IngesterMetrics,
@@ -190,6 +191,7 @@ def create_app(config_class=Config):
             Branch,
             User,
             BranchCatalogItem,
+            CustomerJobContext,
         ):
             _sync_table_columns(model)
         _ensure_default_branches(app)

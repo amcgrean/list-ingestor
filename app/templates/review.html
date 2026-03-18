@@ -18,6 +18,44 @@
 {% else %}
 
 <div class="card">
+  {% if session.upload_context or extracted_context.summary or extracted_context.customer_name or extracted_context.project_name or extracted_context.global_material_context or extracted_context.job_notes or matched_context %}
+  <div class="feedback-panel">
+    <h2 class="section-title">Detected Context</h2>
+    {% if session.upload_context %}
+    <p><strong>Upload notes:</strong> {{ session.upload_context }}</p>
+    {% endif %}
+    {% if extracted_context.summary %}
+    <p><strong>AI summary:</strong> {{ extracted_context.summary }}</p>
+    {% endif %}
+    {% if extracted_context.customer_name or extracted_context.project_name %}
+    <p>
+      {% if extracted_context.customer_name %}<strong>Customer:</strong> {{ extracted_context.customer_name }}{% endif %}
+      {% if extracted_context.customer_name and extracted_context.project_name %} | {% endif %}
+      {% if extracted_context.project_name %}<strong>Project:</strong> {{ extracted_context.project_name }}{% endif %}
+    </p>
+    {% endif %}
+    {% if extracted_context.global_material_context %}
+    <p><strong>Material context:</strong> {{ extracted_context.global_material_context|join(', ') }}</p>
+    {% endif %}
+    {% if extracted_context.job_notes %}
+    <p><strong>Job notes:</strong> {{ extracted_context.job_notes|join(' | ') }}</p>
+    {% endif %}
+    {% if matched_context %}
+    <p>
+      <strong>Synced cloud match:</strong>
+      {{ matched_context.customer_name or 'Unknown customer' }}
+      {% if matched_context.project_name %} / {{ matched_context.project_name }}{% endif %}
+    </p>
+    {% if matched_context.material_context %}
+    <p><strong>Cloud material context:</strong> {{ matched_context.material_context }}</p>
+    {% endif %}
+    {% if matched_context.job_notes %}
+    <p><strong>Cloud job notes:</strong> {{ matched_context.job_notes }}</p>
+    {% endif %}
+    {% endif %}
+  </div>
+  {% endif %}
+
   <!-- Toolbar -->
   <div class="review-toolbar">
     <div class="toolbar-left">

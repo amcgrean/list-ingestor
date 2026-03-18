@@ -53,13 +53,20 @@ from app.services.catalog_importer import (
 )
 from app.services import item_matcher
 from app.services import metrics_service
+from app.services.customer_job_context import match_customer_job_context
+from app.services.upload_context import (
+    context_to_json,
+    enrich_description_for_matching,
+    merge_document_contexts,
+    normalize_document_context,
+)
 from app.services.sku_pipeline import CatalogValidationError
 import sys, os as _os
 # Add project root so services/ package is importable from within the Flask app
 _PROJECT_ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
-from services.openai_vision import extract_items_from_image as _vision_extract
+from services.openai_vision import extract_document_data_from_image as _vision_extract_document
 
 logger = logging.getLogger(__name__)
 main = Blueprint("main", __name__)
@@ -129,6 +136,16 @@ def _read_catalog_upload(file) -> pd.DataFrame:
     if filename.endswith((".xlsx", ".xls")):
         return pd.read_excel(file)
     return pd.read_csv(file)
+
+
+def _load_json_blob(value: str | None) -> dict[str, Any]:
+    if not value:
+        return {}
+    try:
+        data = json.loads(value)
+    except (TypeError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def _all_branches():
@@ -402,6 +419,7 @@ def upload():
             return redirect(url_for("main.index"))
 
     system_id = _resolve_system_id()
+    upload_context = (request.form.get("upload_context") or "").strip()
     first_ext = saved_uploads[0][1].suffix.lstrip(".").lower()
     session = ProcessingSession(
         filename=", ".join(name for name, _ in saved_uploads)[:255],
@@ -410,6 +428,7 @@ def upload():
         user=user,
         status="pending",
         system_id=system_id or branch.code,
+        upload_context=upload_context or None,
     )
     db.session.add(session)
     db.session.commit()
@@ -423,6 +442,7 @@ def upload():
     api_key = current_app.config.get("OPENAI_API_KEY", "")
     t0 = time.perf_counter()
     parsed_items = []
+    document_contexts = []
     try:
         for _, file_path in saved_uploads:
             ext = file_path.suffix.lstrip(".").lower()
@@ -433,16 +453,65 @@ def upload():
             if not api_key:
                 raise RuntimeError("OPENAI_API_KEY is not configured for image/pdf parsing.")
 
-            parsed_items.extend(_vision_extract(
+            vision_payload = _vision_extract_document(
                 file_path,
                 api_key=api_key,
                 model=current_app.config["OPENAI_MODEL"],
-            ))
+            )
+            parsed_items.extend(vision_payload["items"])
+            document_contexts.append(vision_payload["document_context"])
 
         ai_ms = int((time.perf_counter() - t0) * 1000)
-        session.raw_ocr_text = "\n".join(
-            f"{item['quantity']} {item['description']}" for item in parsed_items
+        merged_context = merge_document_contexts(document_contexts)
+        synced_context_match = match_customer_job_context(
+            customer_name=merged_context.get("customer_name", ""),
+            project_name=merged_context.get("project_name", ""),
+            upload_context=upload_context,
+            branch_code=branch.code if branch else "",
         )
+        synced_context_payload = (
+            synced_context_match.to_session_payload() if synced_context_match else {}
+        )
+        session.extracted_context_json = context_to_json(merged_context)
+        session.matched_context_json = (
+            json.dumps(synced_context_payload, sort_keys=True) if synced_context_payload else None
+        )
+        raw_text_lines = []
+        if upload_context:
+            raw_text_lines.append(f"Upload context: {upload_context}")
+        if merged_context.get("summary"):
+            raw_text_lines.append(f"Document summary: {merged_context['summary']}")
+        if merged_context.get("customer_name"):
+            raw_text_lines.append(f"Customer: {merged_context['customer_name']}")
+        if merged_context.get("project_name"):
+            raw_text_lines.append(f"Project: {merged_context['project_name']}")
+        if merged_context.get("global_material_context"):
+            raw_text_lines.append(
+                "Global material context: " + ", ".join(merged_context["global_material_context"])
+            )
+        if merged_context.get("job_notes"):
+            raw_text_lines.append("Job notes: " + " | ".join(merged_context["job_notes"]))
+        if synced_context_payload:
+            raw_text_lines.append(
+                "Matched cloud context: "
+                + " / ".join(
+                    part for part in (
+                        synced_context_payload.get("customer_name"),
+                        synced_context_payload.get("project_name"),
+                    ) if part
+                )
+            )
+            if synced_context_payload.get("material_context"):
+                raw_text_lines.append(
+                    f"Cloud material context: {synced_context_payload['material_context']}"
+                )
+            if synced_context_payload.get("job_notes"):
+                raw_text_lines.append(f"Cloud job notes: {synced_context_payload['job_notes']}")
+        raw_text_lines.extend(
+            f"{item['quantity']} {item.get('source_description') or item['description']}"
+            for item in parsed_items
+        )
+        session.raw_ocr_text = "\n".join(raw_text_lines)
         session.status = "parsed"
         db.session.commit()
         logger.info("vision_parse_complete", extra={
@@ -497,7 +566,31 @@ def upload():
             session.system_id,
             fallback_to_global=current_app.config.get("BRANCH_MATCH_FALLBACK_GLOBAL", True),
         )
-    descriptions = [item["description"] for item in parsed_items]
+    merged_context = merge_document_contexts(document_contexts)
+    synced_context_payload = _load_json_blob(session.matched_context_json)
+    descriptions = [
+        enrich_description_for_matching(
+            item["description"],
+            upload_context=upload_context,
+            document_context={
+                **merged_context,
+                "global_material_context": list(
+                    dict.fromkeys(
+                        merged_context.get("global_material_context", [])
+                        + ([synced_context_payload.get("material_context")] if synced_context_payload.get("material_context") else [])
+                        + item.get("applied_context", [])
+                    )
+                ),
+                "job_notes": list(
+                    dict.fromkeys(
+                        merged_context.get("job_notes", [])
+                        + ([synced_context_payload.get("job_notes")] if synced_context_payload.get("job_notes") else [])
+                    )
+                ),
+            },
+        )
+        for item in parsed_items
+    ]
     threshold = current_app.config["CONFIDENCE_THRESHOLD"]
 
     t0 = time.perf_counter()
@@ -600,6 +693,8 @@ def review(session_id):
         items=items,
         threshold=threshold,
         selected_branch=session.branch,
+        extracted_context=normalize_document_context(_load_json_blob(session.extracted_context_json)),
+        matched_context=_load_json_blob(session.matched_context_json),
     )
 
 

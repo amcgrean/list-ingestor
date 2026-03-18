@@ -98,6 +98,41 @@ python import_branch_catalogs.py data/catalog/recovered_pi_20260318/branches --r
 
 Expected filenames include `10FD_catalog.csv` or `ai_catalog_system_10FD.csv`.
 
+### Upload Context
+
+The upload screen now accepts optional list/job context such as color, brand,
+customer name, or project notes. The Vision extraction pass also attempts to
+infer document-level context like:
+
+- customer name
+- project/job name
+- global material headers such as color or finish
+- operational notes that apply to the whole list
+
+That inferred context is shown on the review screen and is folded into first-pass
+matching to improve SKU selection.
+
+### Optional Cloud Customer/Job Sync
+
+If you have a separate cloud database with customer/job metadata, you can sync a
+local cache into the app DB and use it during uploads.
+
+1. Set `CLOUD_CONTEXT_DATABASE_URL`
+2. Set `CLOUD_CONTEXT_SYNC_QUERY` to a SQL query returning columns such as:
+   `external_id`, `branch_code`, `customer_name`, `project_name`, `aliases`,
+   `material_context`, `job_notes`, `is_active`
+3. Or, if your source schema matches the Beisser mirror tables, set:
+   `CLOUD_CONTEXT_CUSTOMER_TABLE` and `CLOUD_CONTEXT_SHIP_TO_TABLE`
+   and the sync script will build the default join query for you
+4. Run:
+
+```bash
+python sync_customer_job_context.py
+```
+
+The app uses the synced local cache during uploads, so the live upload flow does
+not depend on the cloud DB being reachable.
+
 ---
 
 ## Docker / Production
@@ -149,6 +184,11 @@ All settings are controlled via environment variables (see `.env.example`):
 | `VECTOR_WEIGHT` | `0.6` | Weight for vector similarity |
 | `CONFIDENCE_THRESHOLD` | `0.45` | Scores below this are flagged low-confidence |
 | `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | sentence-transformers model |
+| `CLOUD_CONTEXT_DATABASE_URL` | `""` | Optional external DB for customer/job sync |
+| `CLOUD_CONTEXT_SYNC_QUERY` | `""` | SQL query used by `sync_customer_job_context.py` |
+| `CLOUD_CONTEXT_SOURCE_SYSTEM` | `"cloud"` | Source label stored with synced records |
+| `CLOUD_CONTEXT_CUSTOMER_TABLE` | `""` | Optional customer table for default sync query |
+| `CLOUD_CONTEXT_SHIP_TO_TABLE` | `""` | Optional ship-to/job table for default sync query |
 
 ---
 

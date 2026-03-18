@@ -64,3 +64,10 @@ class Config:
     )
 
     BRANCH_MATCH_FALLBACK_GLOBAL = os.environ.get("BRANCH_MATCH_FALLBACK_GLOBAL", "1") in {"1", "true", "True"}
+
+    # Optional external customer/job context sync
+    CLOUD_CONTEXT_DATABASE_URL = os.environ.get("CLOUD_CONTEXT_DATABASE_URL", "")
+    CLOUD_CONTEXT_SOURCE_SYSTEM = os.environ.get("CLOUD_CONTEXT_SOURCE_SYSTEM", "cloud")
+    CLOUD_CONTEXT_SYNC_QUERY = os.environ.get("CLOUD_CONTEXT_SYNC_QUERY", "")
+    CLOUD_CONTEXT_CUSTOMER_TABLE = os.environ.get("CLOUD_CONTEXT_CUSTOMER_TABLE", os.environ.get("CUST", ""))
+    CLOUD_CONTEXT_SHIP_TO_TABLE = os.environ.get("CLOUD_CONTEXT_SHIP_TO_TABLE", os.environ.get("SHIP_TO", ""))

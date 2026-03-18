@@ -40,6 +40,18 @@
     </div>
 
     <div class="provider-selector">
+      <label class="provider-label" for="upload-context">List Context / Job Notes</label>
+      <textarea
+        id="upload-context"
+        name="upload_context"
+        class="search-input"
+        rows="4"
+        placeholder="Optional. Example: Use Trex Toasted Sand for the deck boards below unless a line says otherwise. Customer: Smith patio job."
+      ></textarea>
+      <p class="help-text">Use this for color, finish, brand, job, or customer notes that should help first-pass matching.</p>
+    </div>
+
+    <div class="provider-selector">
       <label class="provider-label">Image Reader</label>
       <div class="provider-options">
         {% if openai_available %}

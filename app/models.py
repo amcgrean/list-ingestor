@@ -262,6 +262,64 @@ class SessionFeedbackEvent(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
 
 
+class CustomerJobContext(db.Model):
+    """Locally synced customer/job context from an external cloud database."""
+    __tablename__ = "customer_job_contexts"
+
+    id = db.Column(db.Integer, primary_key=True)
+    source_system = db.Column(db.String(50), default="cloud", nullable=False, index=True)
+    external_id = db.Column(db.String(255), nullable=False, index=True)
+    branch_code = db.Column(db.String(20), nullable=True, index=True)
+    customer_name = db.Column(db.String(255), nullable=True, index=True)
+    project_name = db.Column(db.String(255), nullable=True, index=True)
+    aliases_json = db.Column(db.Text, nullable=True)
+    material_context = db.Column(db.Text, nullable=True)
+    job_notes = db.Column(db.Text, nullable=True)
+    metadata_json = db.Column(db.Text, nullable=True)
+    is_active = db.Column(db.Boolean, default=True, nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint("source_system", "external_id", name="uq_customer_job_context_source"),
+    )
+
+    def aliases(self):
+        if not self.aliases_json:
+            return []
+        try:
+            data = json.loads(self.aliases_json)
+        except (TypeError, ValueError):
+            return []
+        if not isinstance(data, list):
+            return []
+        return [str(item).strip() for item in data if str(item).strip()]
+
+    def metadata_dict(self):
+        if not self.metadata_json:
+            return {}
+        try:
+            data = json.loads(self.metadata_json)
+        except (TypeError, ValueError):
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "source_system": self.source_system,
+            "external_id": self.external_id,
+            "branch_code": self.branch_code,
+            "customer_name": self.customer_name,
+            "project_name": self.project_name,
+            "aliases": self.aliases(),
+            "material_context": self.material_context,
+            "job_notes": self.job_notes,
+            "metadata": self.metadata_dict(),
+            "is_active": self.is_active,
+        }
+
+
 class ProcessingSession(db.Model):
     """Tracks one upload-and-process job."""
     __tablename__ = "processing_sessions"
@@ -276,6 +334,9 @@ class ProcessingSession(db.Model):
     # pending / ocr_complete / parsed / matched / reviewed / exported
     error_message = db.Column(db.Text, nullable=True)
     system_id = db.Column(db.String(100), default="", index=True)
+    upload_context = db.Column(db.Text, nullable=True)
+    extracted_context_json = db.Column(db.Text, nullable=True)
+    matched_context_json = db.Column(db.Text, nullable=True)
     session_comment = db.Column(db.Text, nullable=True)
     feedback_reprocess_requested = db.Column(
         db.Boolean,
@@ -299,6 +360,9 @@ class ProcessingSession(db.Model):
             "user_email": self.user.email if self.user else None,
             "status": self.status,
             "error_message": self.error_message,
+            "upload_context": self.upload_context,
+            "extracted_context_json": self.extracted_context_json,
+            "matched_context_json": self.matched_context_json,
             "created_at": self.created_at.isoformat(),
             "item_count": len(self.items),
         }
