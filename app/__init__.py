@@ -78,9 +78,15 @@ def _sync_table_columns(model):
             continue
 
         column_type = column.type.compile(dialect=db.engine.dialect)
+        # Include server_default so NOT NULL columns can be added to non-empty tables
+        if column.server_default is not None:
+            default_sql = column.server_default.arg if hasattr(column.server_default, 'arg') else str(column.server_default)
+            default_clause = f" DEFAULT {default_sql}"
+        else:
+            default_clause = ""
         nullable_clause = "" if column.nullable else " NOT NULL"
         db.session.execute(
-            text(f"ALTER TABLE {table_name} ADD COLUMN {column.name} {column_type}{nullable_clause}")
+            text(f"ALTER TABLE {table_name} ADD COLUMN {column.name} {column_type}{default_clause}{nullable_clause}")
         )
 
     db.session.commit()
@@ -104,11 +110,14 @@ def create_app(config_class=Config):
     app.register_blueprint(main)
 
     with app.app_context():
-        from app.models import ERPItem, IngesterMetrics, ProcessingSession
+        from app.models import ERPItem, IngesterMetrics, ProcessingSession, ExtractedItem, MatchFeedbackEvent, SessionFeedbackEvent
 
         db.create_all()
         _sync_table_columns(ERPItem)
         _sync_table_columns(IngesterMetrics)
         _sync_table_columns(ProcessingSession)
+        _sync_table_columns(ExtractedItem)
+        _sync_table_columns(MatchFeedbackEvent)
+        _sync_table_columns(SessionFeedbackEvent)
 
     return app

@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-header">
   <h1>Convert Material List to ERP Order</h1>
-  <p class="subtitle">Upload a photo or PDF of a contractor's material list to extract and match items automatically.</p>
+  <p class="subtitle">Upload one or more photos, PDFs, or CSVs of a contractor's material list to extract and match items automatically.</p>
 </div>
 
 <div class="card upload-card">
@@ -12,19 +12,18 @@
     <div class="drop-zone" id="drop-zone">
       <div class="drop-zone-icon">&#128196;</div>
       <p class="drop-zone-label">Drag &amp; drop your file here, or <label for="file-input" class="browse-link">browse</label></p>
-      <p class="drop-zone-hint">Supported: JPG, PNG, PDF &mdash; max 32 MB</p>
-      <input id="file-input" type="file" name="file" accept="image/*,.pdf" class="file-input-hidden" required />
-      <input id="camera-input" type="file" accept="image/*" capture="environment" class="file-input-hidden" />
+      <p class="drop-zone-hint">Supported: Images, PDF, CSV &mdash; max 32 MB total</p>
+      <input id="file-input" type="file" name="files" accept="image/*,.pdf,.csv" class="file-input-hidden" multiple required />
     </div>
 
     <div class="mobile-upload-actions">
-      <button type="button" class="btn btn-secondary" id="camera-btn">&#128247; Take Photo</button>
-      <button type="button" class="btn btn-secondary" id="gallery-btn">&#128193; Choose File</button>
+      <button type="button" class="btn btn-secondary" id="mobile-file-btn">&#128247; Add Photos / Files</button>
     </div>
 
     <div id="file-preview" class="file-preview hidden">
       <span class="file-icon">&#128196;</span>
       <span id="file-name" class="file-name"></span>
+      <span id="file-count" class="file-count hidden"></span>
       <button type="button" id="clear-file" class="btn-icon" title="Remove file">&times;</button>
     </div>
 

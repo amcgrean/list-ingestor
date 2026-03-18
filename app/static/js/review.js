@@ -6,10 +6,11 @@
   const skipLowBtn     = document.getElementById("skip-unmatched-btn");
   const toggleRawBtn   = document.getElementById("toggle-raw-btn");
   const rawText        = document.getElementById("raw-text");
+  const sessionComment = document.getElementById("session-comment");
+  const requestReprocess = document.getElementById("request-reprocess");
+  const feedbackWorkflowBtn = document.getElementById("feedback-workflow-btn");
+  const feedbackContext = document.getElementById("feedback-context");
 
-  // ----------------------------------------------------------------
-  // Raw text toggle
-  // ----------------------------------------------------------------
   if (toggleRawBtn && rawText) {
     toggleRawBtn.addEventListener("click", () => {
       const hidden = rawText.classList.toggle("hidden");
@@ -17,9 +18,6 @@
     });
   }
 
-  // ----------------------------------------------------------------
-  // Collect row state
-  // ----------------------------------------------------------------
   function collectItems() {
     const rows = document.querySelectorAll(".item-row");
     const items = [];
@@ -29,16 +27,18 @@
       const code     = row.querySelector(".item-code-hidden").value;
       const skipped  = row.querySelector(".skip-cb").checked;
       const confirmed = row.querySelector(".confirm-cb").checked;
-      items.push({ id, quantity: parseFloat(qty) || 1, item_code: code, skipped, confirmed });
+      const comment = row.querySelector(".item-comment")?.value?.trim() || "";
+      items.push({ id, quantity: parseFloat(qty) || 1, item_code: code, skipped, confirmed, comment });
     });
     return items;
   }
 
-  // ----------------------------------------------------------------
-  // Save
-  // ----------------------------------------------------------------
   saveBtn.addEventListener("click", () => {
-    const payload = { items: collectItems() };
+    const payload = {
+      items: collectItems(),
+      session_comment: sessionComment ? sessionComment.value.trim() : "",
+      request_reprocess: requestReprocess ? requestReprocess.checked : false,
+    };
     saveBtn.disabled = true;
     saveStatus.textContent = "Saving…";
 
@@ -49,29 +49,44 @@
     })
       .then((r) => r.json())
       .then((data) => {
-        if (data.ok) {
-          saveStatus.textContent = "Saved!";
-          setTimeout(() => (saveStatus.textContent = ""), 2500);
-        } else {
-          saveStatus.textContent = "Save failed.";
-        }
+        saveStatus.textContent = data.ok ? "Saved!" : "Save failed.";
+        if (data.ok) setTimeout(() => (saveStatus.textContent = ""), 2500);
       })
       .catch(() => { saveStatus.textContent = "Network error."; })
       .finally(() => { saveBtn.disabled = false; });
   });
 
-  // ----------------------------------------------------------------
-  // Confirm all
-  // ----------------------------------------------------------------
+  if (feedbackWorkflowBtn) {
+    feedbackWorkflowBtn.addEventListener("click", () => {
+      const comment = sessionComment ? sessionComment.value.trim() : "";
+      if (!comment) {
+        alert("Please add session feedback before generating reprocess context.");
+        return;
+      }
+      fetch(window.FEEDBACK_WORKFLOW_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ comment }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (!data.ok) throw new Error(data.error || "failed");
+          feedbackContext.textContent = data.suggested_prompt;
+          feedbackContext.classList.remove("hidden");
+        })
+        .catch(() => {
+          feedbackContext.textContent = "Could not generate reprocess context.";
+          feedbackContext.classList.remove("hidden");
+        });
+    });
+  }
+
   if (confirmAllBtn) {
     confirmAllBtn.addEventListener("click", () => {
       document.querySelectorAll(".confirm-cb").forEach((cb) => { cb.checked = true; });
     });
   }
 
-  // ----------------------------------------------------------------
-  // Skip low-confidence
-  // ----------------------------------------------------------------
   if (skipLowBtn) {
     skipLowBtn.addEventListener("click", () => {
       document.querySelectorAll(".item-row.low-confidence").forEach((row) => {
@@ -81,9 +96,6 @@
     });
   }
 
-  // ----------------------------------------------------------------
-  // Skip checkbox toggles row style
-  // ----------------------------------------------------------------
   document.querySelectorAll(".skip-cb").forEach((cb) => {
     cb.addEventListener("change", () => {
       const row = cb.closest(".item-row");
@@ -91,10 +103,6 @@
     });
   });
 
-  // ----------------------------------------------------------------
-  // Autocomplete for ERP item search
-  // ----------------------------------------------------------------
-  let activeDropdown = null;
   let debounceTimer = null;
 
   function buildDropdown(dropdown, results, row) {
@@ -147,7 +155,6 @@
       setTimeout(() => dropdown.classList.add("hidden"), 150);
     });
 
-    // Keyboard nav
     input.addEventListener("keydown", (e) => {
       const items = dropdown.querySelectorAll(".autocomplete-item");
       const focused = dropdown.querySelector(".autocomplete-item.focused");
