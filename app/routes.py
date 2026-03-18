@@ -11,6 +11,7 @@ import os
 import tempfile
 import time
 import uuid
+from typing import Any
 from pathlib import Path
 
 import pandas as pd
@@ -28,7 +29,7 @@ from flask import (
 from werkzeug.utils import secure_filename
 
 from app import db
-from app.models import ERPItem, ExtractedItem, IngesterMetrics, ProcessingSession, ItemAlias, MatchFeedbackEvent
+from app.models import ERPItem, ExtractedItem, IngesterMetrics, ProcessingSession, ItemAlias, MatchFeedbackEvent, SessionFeedbackEvent
 from app.services import item_matcher
 from app.services import metrics_service
 import sys, os as _os
@@ -49,6 +50,32 @@ main = Blueprint("main", __name__)
 def allowed_file(filename: str) -> bool:
     ext = Path(filename).suffix.lstrip(".").lower()
     return ext in current_app.config["ALLOWED_EXTENSIONS"]
+
+
+def parse_csv_items(file_path: Path) -> list[dict[str, Any]]:
+    """Extract quantity/description rows from a CSV upload."""
+    df = pd.read_csv(file_path)
+    lower_cols = {c.lower(): c for c in df.columns}
+
+    description_col = next((lower_cols[c] for c in ("description", "item", "material", "name") if c in lower_cols), None)
+    if not description_col:
+        raise ValueError("CSV must contain a description-like column (description/item/material/name).")
+
+    quantity_col = next((lower_cols[c] for c in ("quantity", "qty", "count") if c in lower_cols), None)
+
+    parsed: list[dict[str, Any]] = []
+    for _, row in df.iterrows():
+        desc = str(row.get(description_col, "")).strip()
+        if not desc or desc.lower() == "nan":
+            continue
+        qty = 1.0
+        if quantity_col:
+            try:
+                qty = float(row.get(quantity_col, 1) or 1)
+            except (TypeError, ValueError):
+                qty = 1.0
+        parsed.append({"quantity": qty, "description": desc})
+    return parsed
 
 
 def save_upload(file) -> Path:
@@ -89,31 +116,39 @@ def index():
 
 @main.route("/upload", methods=["POST"])
 def upload():
-    if "file" not in request.files:
+    files = request.files.getlist("files")
+    if not files:
+        legacy = request.files.get("file")
+        files = [legacy] if legacy else []
+
+    files = [f for f in files if f and f.filename]
+    if not files:
         flash("No file selected.", "error")
         return redirect(url_for("main.index"))
 
-    file = request.files["file"]
-    if not file.filename:
-        flash("No file selected.", "error")
+    invalid = [f.filename for f in files if not allowed_file(f.filename)]
+    if invalid:
+        flash("Unsupported file type. Only images, PDFs, and CSV files are allowed.", "error")
         return redirect(url_for("main.index"))
 
-    if not allowed_file(file.filename):
-        flash("Unsupported file type. Please upload JPG, PNG, or PDF.", "error")
-        return redirect(url_for("main.index"))
+    saved_uploads: list[tuple[str, Path]] = []
+    for file in files:
+        try:
+            saved_uploads.append((secure_filename(file.filename), save_upload(file)))
+        except Exception as exc:
+            logger.exception("Failed to save uploaded file")
+            flash(f"Could not save an uploaded file: {exc}", "error")
+            for _, path in saved_uploads:
+                try:
+                    os.unlink(path)
+                except OSError:
+                    pass
+            return redirect(url_for("main.index"))
 
-    # Save uploaded file
-    try:
-        file_path = save_upload(file)
-    except Exception as exc:
-        logger.exception("Failed to save uploaded file")
-        flash(f"Could not save the uploaded file: {exc}", "error")
-        return redirect(url_for("main.index"))
-    ext = file_path.suffix.lstrip(".").lower()
-
+    first_ext = saved_uploads[0][1].suffix.lstrip(".").lower()
     session = ProcessingSession(
-        filename=secure_filename(file.filename),
-        file_type=ext,
+        filename=", ".join(name for name, _ in saved_uploads)[:255],
+        file_type=first_ext if len(saved_uploads) == 1 else "batch",
         status="pending",
     )
     db.session.add(session)
@@ -122,30 +157,29 @@ def upload():
     t_start = time.perf_counter()
     ai_ms = match_ms = None
     ai_parse_error = match_error = False
-    provider = "openai"  # Vision API is always OpenAI
+    provider = "openai"
 
-    # --- Step 1: OpenAI Vision — extract structured items directly from image ---
+    # --- Step 1: parse each upload ---
     api_key = current_app.config.get("OPENAI_API_KEY", "")
-    if not api_key:
-        session.status = "error"
-        session.error_message = "OPENAI_API_KEY is not configured."
-        db.session.commit()
-        flash("OpenAI Vision is not configured. Set OPENAI_API_KEY.", "error")
-        try:
-            os.unlink(file_path)
-        except OSError:
-            pass
-        return redirect(url_for("main.index"))
-
     t0 = time.perf_counter()
+    parsed_items = []
     try:
-        parsed_items = _vision_extract(
-            file_path,
-            api_key=api_key,
-            model=current_app.config["OPENAI_MODEL"],
-        )
+        for _, file_path in saved_uploads:
+            ext = file_path.suffix.lstrip(".").lower()
+            if ext == "csv":
+                parsed_items.extend(parse_csv_items(file_path))
+                continue
+
+            if not api_key:
+                raise RuntimeError("OPENAI_API_KEY is not configured for image/pdf parsing.")
+
+            parsed_items.extend(_vision_extract(
+                file_path,
+                api_key=api_key,
+                model=current_app.config["OPENAI_MODEL"],
+            ))
+
         ai_ms = int((time.perf_counter() - t0) * 1000)
-        # Store a text representation of extracted items for the raw-text debug view
         session.raw_ocr_text = "\n".join(
             f"{item['quantity']} {item['description']}" for item in parsed_items
         )
@@ -158,11 +192,11 @@ def upload():
     except Exception as exc:
         ai_ms = int((time.perf_counter() - t0) * 1000)
         ai_parse_error = True
-        logger.exception("Vision parsing failed for session %d", session.id, extra={
+        logger.exception("Parsing failed for session %d", session.id, extra={
             "session_id": session.id, "stage": "vision_parse", "duration_ms": ai_ms,
         })
         session.status = "error"
-        session.error_message = f"Vision parsing failed: {exc}"
+        session.error_message = f"Parsing failed: {exc}"
         db.session.commit()
         metrics_service.save_session_metrics(
             session_id=session.id, ai_provider=provider,
@@ -172,18 +206,18 @@ def upload():
             avg_confidence=None, avg_fuzzy_score=None, avg_vector_score=None,
             ai_parse_error=True,
         )
-        flash(f"Could not read the image: {exc}", "error")
+        flash(f"Could not parse the upload(s): {exc}", "error")
         return redirect(url_for("main.index"))
     finally:
-        # Image is never stored permanently
-        try:
-            os.unlink(file_path)
-        except OSError:
-            pass
+        for _, file_path in saved_uploads:
+            try:
+                os.unlink(file_path)
+            except OSError:
+                pass
 
     if not parsed_items:
         session.status = "error"
-        session.error_message = "Vision API returned no items from the material list."
+        session.error_message = "Parser returned no items from the uploaded material lists."
         db.session.commit()
         metrics_service.save_session_metrics(
             session_id=session.id, ai_provider=provider,
@@ -193,7 +227,7 @@ def upload():
             avg_confidence=None, avg_fuzzy_score=None, avg_vector_score=None,
             ai_parse_error=True,
         )
-        flash("No items could be extracted from the material list.", "warning")
+        flash("No items could be extracted from the uploaded material list(s).", "warning")
         return redirect(url_for("main.index"))
 
     # --- Step 3: Item matching ---
@@ -211,7 +245,7 @@ def upload():
                 fuzzy_weight=current_app.config["FUZZY_WEIGHT"],
                 vector_weight=current_app.config["VECTOR_WEIGHT"],
             )
-        except Exception as exc:
+        except Exception:
             logger.exception("Item matching failed for session %d", session.id, extra={
                 "session_id": session.id, "stage": "match",
             })
@@ -252,7 +286,6 @@ def upload():
     session.status = "matched"
     db.session.commit()
 
-    # Persist pipeline metrics
     metrics_service.save_session_metrics(
         session_id=session.id,
         ai_provider=provider,
@@ -307,6 +340,9 @@ def save_review(session_id):
     if not data or "items" not in data:
         return jsonify({"error": "Invalid payload"}), 400
 
+    session_comment = str(data.get("session_comment", "")).strip()
+    request_reprocess = bool(data.get("request_reprocess", False))
+
     for item_data in data["items"]:
         item = ExtractedItem.query.get(item_data.get("id"))
         if not item or item.session_id != session_id:
@@ -344,11 +380,64 @@ def save_review(session_id):
             confidence_score=float(item.confidence_score or 0.0),
             fuzzy_score=float(item.fuzzy_score or 0.0),
             vector_score=float(item.vector_score or 0.0),
+            feedback_comment=(item_data.get("comment") or None),
+        ))
+
+    if session_comment:
+        session.session_comment = session_comment
+        session.feedback_reprocess_requested = request_reprocess
+        db.session.add(SessionFeedbackEvent(
+            session_id=session_id,
+            comment=session_comment,
+            requested_reprocess=request_reprocess,
         ))
 
     session.status = "reviewed"
     db.session.commit()
     return jsonify({"ok": True})
+
+
+@main.route("/review/<int:session_id>/feedback-workflow", methods=["POST"])
+def feedback_workflow(session_id):
+    """Build a suggested reprocessing prompt from user feedback and log the event."""
+    session = ProcessingSession.query.get_or_404(session_id)
+    data = request.get_json() or {}
+    comment = str(data.get("comment", "")).strip()
+    if not comment:
+        return jsonify({"error": "Feedback comment is required."}), 400
+
+    items = ExtractedItem.query.filter_by(session_id=session_id).all()
+    low_conf = [i for i in items if (i.confidence_score or 0) < current_app.config["CONFIDENCE_THRESHOLD"]]
+    corrected = [i for i in items if i.final_item_code and i.final_item_code != i.matched_item_code]
+
+    context_blob = {
+        "session_id": session.id,
+        "filename": session.filename,
+        "user_feedback": comment,
+        "low_confidence_items": [
+            {"description": i.raw_description, "predicted_sku": i.matched_item_code, "confidence": i.confidence_score}
+            for i in low_conf
+        ],
+        "corrected_items": [
+            {"description": i.raw_description, "predicted_sku": i.matched_item_code, "final_sku": i.final_item_code}
+            for i in corrected
+        ],
+    }
+
+    db.session.add(SessionFeedbackEvent(
+        session_id=session_id,
+        comment=comment,
+        requested_reprocess=True,
+    ))
+    session.session_comment = comment
+    session.feedback_reprocess_requested = True
+    db.session.commit()
+
+    suggestion = (
+        "Use this feedback context to re-interpret the uploaded material list and prioritize corrected patterns. "
+        f"Context JSON: {json.dumps(context_blob)}"
+    )
+    return jsonify({"ok": True, "suggested_prompt": suggestion, "context": context_blob})
 
 
 # ---------------------------------------------------------------------------

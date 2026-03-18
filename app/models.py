@@ -165,6 +165,18 @@ class MatchFeedbackEvent(db.Model):
     confidence_score = db.Column(db.Float, default=0.0, nullable=False)
     fuzzy_score = db.Column(db.Float, default=0.0, nullable=False)
     vector_score = db.Column(db.Float, default=0.0, nullable=False)
+    feedback_comment = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+
+class SessionFeedbackEvent(db.Model):
+    """User feedback event for an entire session and optional reprocess request."""
+    __tablename__ = "session_feedback_events"
+
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.Integer, db.ForeignKey("processing_sessions.id"), nullable=False, index=True)
+    comment = db.Column(db.Text, nullable=False)
+    requested_reprocess = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
 
 
@@ -179,6 +191,8 @@ class ProcessingSession(db.Model):
     status = db.Column(db.String(50), default="pending")
     # pending / ocr_complete / parsed / matched / reviewed / exported
     error_message = db.Column(db.Text, nullable=True)
+    session_comment = db.Column(db.Text, nullable=True)
+    feedback_reprocess_requested = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

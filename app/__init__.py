@@ -104,10 +104,14 @@ def create_app(config_class=Config):
     app.register_blueprint(main)
 
     with app.app_context():
-        from app.models import ERPItem, IngesterMetrics
+        from app.models import ERPItem, IngesterMetrics, ProcessingSession, ExtractedItem, MatchFeedbackEvent, SessionFeedbackEvent
 
         db.create_all()
         _sync_table_columns(ERPItem)
         _sync_table_columns(IngesterMetrics)
+        _sync_table_columns(ProcessingSession)
+        _sync_table_columns(ExtractedItem)
+        _sync_table_columns(MatchFeedbackEvent)
+        _sync_table_columns(SessionFeedbackEvent)
 
     return app
