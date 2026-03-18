@@ -717,6 +717,7 @@ def upload():
             confidence_score=match["confidence_score"],
             fuzzy_score=match["fuzzy_score"],
             vector_score=match["vector_score"],
+            candidates_json=json.dumps(match.get("candidates", [])),
         )
         db.session.add(extracted)
 
@@ -983,6 +984,7 @@ def reprocess_session(session_id):
         item.confidence_score = match["confidence_score"]
         item.fuzzy_score = match["fuzzy_score"]
         item.vector_score = match["vector_score"]
+        item.candidates_json = json.dumps(match.get("candidates", []))
 
     session.status = "matched"
     db.session.commit()
