@@ -4,46 +4,42 @@ import json
 
 
 class IngesterMetrics(db.Model):
-    """Per-session pipeline timing, volume, and error metrics captured at processing time.
+    """Per-session pipeline timing, volume, and error metrics captured at processing time."""
 
-    Each row corresponds to one ProcessingSession upload.  Accuracy metrics
-    (correction / skip rates) are derived from MatchFeedbackEvent records after
-    the user completes review — this table captures what was measurable at
-    ingest time: stage latencies, item counts, and initial confidence scores.
-    """
     __tablename__ = "ingester_metrics"
 
     id = db.Column(db.Integer, primary_key=True)
     session_id = db.Column(
-        db.Integer, db.ForeignKey("processing_sessions.id"),
-        unique=True, nullable=False, index=True,
+        db.Integer,
+        db.ForeignKey("processing_sessions.id"),
+        unique=True,
+        nullable=False,
+        index=True,
     )
     ai_provider = db.Column(db.String(20), default="claude")
 
-    # Stage durations (milliseconds)
     ocr_duration_ms = db.Column(db.Integer, nullable=True)
     ai_parse_duration_ms = db.Column(db.Integer, nullable=True)
     match_duration_ms = db.Column(db.Integer, nullable=True)
     total_duration_ms = db.Column(db.Integer, nullable=True)
 
-    # Volume
     items_extracted = db.Column(db.Integer, default=0)
     items_matched = db.Column(db.Integer, default=0)
     items_below_threshold = db.Column(db.Integer, default=0)
 
-    # Score averages at match time (before any user correction)
     avg_confidence = db.Column(db.Float, nullable=True)
     avg_fuzzy_score = db.Column(db.Float, nullable=True)
     avg_vector_score = db.Column(db.Float, nullable=True)
 
-    # Error flags
     ocr_error = db.Column(db.Boolean, default=False)
     ai_parse_error = db.Column(db.Boolean, default=False)
     match_error = db.Column(db.Boolean, default=False)
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
 
-    session = db.relationship("ProcessingSession", backref=db.backref("metrics", uselist=False))
+    session = db.relationship(
+        "ProcessingSession", backref=db.backref("metrics", uselist=False)
+    )
 
     def to_dict(self):
         return {
@@ -57,9 +53,15 @@ class IngesterMetrics(db.Model):
             "items_extracted": self.items_extracted,
             "items_matched": self.items_matched,
             "items_below_threshold": self.items_below_threshold,
-            "avg_confidence": round(self.avg_confidence, 4) if self.avg_confidence is not None else None,
-            "avg_fuzzy_score": round(self.avg_fuzzy_score, 4) if self.avg_fuzzy_score is not None else None,
-            "avg_vector_score": round(self.avg_vector_score, 4) if self.avg_vector_score is not None else None,
+            "avg_confidence": round(self.avg_confidence, 4)
+            if self.avg_confidence is not None
+            else None,
+            "avg_fuzzy_score": round(self.avg_fuzzy_score, 4)
+            if self.avg_fuzzy_score is not None
+            else None,
+            "avg_vector_score": round(self.avg_vector_score, 4)
+            if self.avg_vector_score is not None
+            else None,
             "ocr_error": self.ocr_error,
             "ai_parse_error": self.ai_parse_error,
             "match_error": self.match_error,
@@ -69,6 +71,7 @@ class IngesterMetrics(db.Model):
 
 class ERPItem(db.Model):
     """An item in the ERP catalog loaded from CSV."""
+
     __tablename__ = "erp_items"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -92,7 +95,6 @@ class ERPItem(db.Model):
     days_since_last_sold = db.Column(db.Integer, nullable=True)
     sold_recency_bucket = db.Column(db.String(50), default="unknown")
     sold_weight = db.Column(db.Float, default=0.25)
-    # Serialized embedding vector (list of floats as JSON string)
     _embedding = db.Column("embedding", db.Text, nullable=True)
 
     @property
@@ -110,7 +112,6 @@ class ERPItem(db.Model):
 
     @property
     def searchable_text(self):
-        """Combined text used for matching."""
         parts = [self.description]
         if self.keywords:
             parts.append(self.keywords)
@@ -212,8 +213,12 @@ class BranchCatalogItem(db.Model):
     erp_item_id = db.Column(db.Integer, db.ForeignKey("erp_items.id"), nullable=False, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
-    branch = db.relationship("Branch", backref=db.backref("catalog_links", cascade="all, delete-orphan"))
-    erp_item = db.relationship("ERPItem", backref=db.backref("branch_links", cascade="all, delete-orphan"))
+    branch = db.relationship(
+        "Branch", backref=db.backref("catalog_links", cascade="all, delete-orphan")
+    )
+    erp_item = db.relationship(
+        "ERPItem", backref=db.backref("branch_links", cascade="all, delete-orphan")
+    )
 
     __table_args__ = (
         db.UniqueConstraint("branch_id", "erp_item_id", name="uq_branch_catalog_item"),
@@ -221,7 +226,6 @@ class BranchCatalogItem(db.Model):
 
 
 class ItemAlias(db.Model):
-    """User learned alias-to-SKU mapping from review overrides."""
     __tablename__ = "item_aliases"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -232,7 +236,6 @@ class ItemAlias(db.Model):
 
 
 class MatchFeedbackEvent(db.Model):
-    """Historical user feedback captured during review to improve matching."""
     __tablename__ = "match_feedback_events"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -248,22 +251,31 @@ class MatchFeedbackEvent(db.Model):
     fuzzy_score = db.Column(db.Float, default=0.0, nullable=False)
     vector_score = db.Column(db.Float, default=0.0, nullable=False)
     feedback_comment = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True, server_default=db.func.now())
+    created_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow,
+        nullable=False,
+        index=True,
+        server_default=db.func.now(),
+    )
 
 
 class SessionFeedbackEvent(db.Model):
-    """User feedback event for an entire session and optional reprocess request."""
     __tablename__ = "session_feedback_events"
 
     id = db.Column(db.Integer, primary_key=True)
     session_id = db.Column(db.Integer, db.ForeignKey("processing_sessions.id"), nullable=False, index=True)
     comment = db.Column(db.Text, nullable=False)
-    requested_reprocess = db.Column(db.Boolean, default=False, nullable=False)
+    requested_reprocess = db.Column(
+        db.Boolean,
+        default=False,
+        nullable=False,
+        server_default=db.text("false"),
+    )
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
 
 
 class CustomerJobContext(db.Model):
-    """Locally synced customer/job context from an external cloud database."""
     __tablename__ = "customer_job_contexts"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -321,17 +333,15 @@ class CustomerJobContext(db.Model):
 
 
 class ProcessingSession(db.Model):
-    """Tracks one upload-and-process job."""
     __tablename__ = "processing_sessions"
 
     id = db.Column(db.Integer, primary_key=True)
     filename = db.Column(db.String(255), nullable=False)
-    file_type = db.Column(db.String(20), nullable=False)  # jpg/png/pdf
+    file_type = db.Column(db.String(20), nullable=False)
     branch_id = db.Column(db.Integer, db.ForeignKey("branches.id"), nullable=True, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
     raw_ocr_text = db.Column(db.Text, default="")
     status = db.Column(db.String(50), default="pending")
-    # pending / ocr_complete / parsed / matched / reviewed / exported
     error_message = db.Column(db.Text, nullable=True)
     system_id = db.Column(db.String(100), default="", index=True)
     upload_context = db.Column(db.Text, nullable=True)
@@ -369,15 +379,25 @@ class ProcessingSession(db.Model):
 
 
 class ExtractedItem(db.Model):
-    """One line item extracted from an uploaded material list."""
     __tablename__ = "extracted_items"
 
     id = db.Column(db.Integer, primary_key=True)
     session_id = db.Column(db.Integer, db.ForeignKey("processing_sessions.id"), nullable=False)
 
-    # From AI parser
     quantity = db.Column(db.Float, default=1.0)
     raw_description = db.Column(db.String(500), nullable=False)
+
+    # Parse pipeline metadata
+    parse_stage = db.Column(db.String(50), default="legacy", nullable=True)
+    parse_line_id = db.Column(db.String(64), nullable=True)
+    normalized_description = db.Column(db.String(500), nullable=True)
+    section_header = db.Column(db.String(255), nullable=True)
+    brand = db.Column(db.String(150), nullable=True)
+    color = db.Column(db.String(120), nullable=True)
+    product_family = db.Column(db.String(200), nullable=True)
+    product_type = db.Column(db.String(200), nullable=True)
+    ambiguity_flags = db.Column(db.Text, nullable=True)
+    review_reason = db.Column(db.Text, nullable=True)
 
     # From item matcher
     matched_item_code = db.Column(db.String(100), nullable=True)
@@ -422,6 +442,15 @@ class ExtractedItem(db.Model):
             "id": self.id,
             "quantity": self.effective_quantity(),
             "raw_description": self.raw_description,
+            "parse_stage": self.parse_stage,
+            "normalized_description": self.normalized_description,
+            "section_header": self.section_header,
+            "brand": self.brand,
+            "color": self.color,
+            "product_family": self.product_family,
+            "product_type": self.product_type,
+            "ambiguity_flags": json.loads(self.ambiguity_flags) if self.ambiguity_flags else [],
+            "review_reason": self.review_reason,
             "matched_item_code": self.matched_item_code,
             "matched_description": self.matched_description,
             "confidence_score": round(self.confidence_score, 3),

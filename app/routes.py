@@ -60,6 +60,7 @@ from app.services.upload_context import (
     merge_document_contexts,
     normalize_document_context,
 )
+from app.services.parse_pipeline import parse_uploads
 from app.services.sku_pipeline import CatalogValidationError
 import sys, os as _os
 # Add project root so services/ package is importable from within the Flask app
@@ -441,25 +442,84 @@ def upload():
     # --- Step 1: parse each upload ---
     api_key = current_app.config.get("OPENAI_API_KEY", "")
     t0 = time.perf_counter()
-    parsed_items = []
-    document_contexts = []
+    parsed_items: list[dict[str, Any]] = []
+    document_contexts: list[dict[str, Any]] = []
+    parse_stage_label = "legacy"
     try:
-        for _, file_path in saved_uploads:
-            ext = file_path.suffix.lstrip(".").lower()
-            if ext == "csv":
-                parsed_items.extend(parse_csv_items(file_path))
-                continue
+        upload_paths = [path for _, path in saved_uploads]
+        use_context_pipeline = current_app.config.get("ENABLE_CONTEXT_PIPELINE", True)
 
-            if not api_key:
-                raise RuntimeError("OPENAI_API_KEY is not configured for image/pdf parsing.")
+        if use_context_pipeline:
+            try:
+                _, _, stage_c_lines = parse_uploads(
+                    upload_paths,
+                    api_key=api_key,
+                    session_id=session.id,
+                )
+                parsed_items = [
+                    {
+                        "line_id": line.line_id,
+                        "quantity": line.quantity,
+                        "description": line.raw_text,
+                        "raw_text": line.raw_text,
+                        "source_description": line.raw_text,
+                        "applied_context": [value for value in (line.section_header,) if value],
+                        "normalized_description": line.normalized_description,
+                        "section_header": line.section_header,
+                        "brand": line.brand,
+                        "color": line.color,
+                        "product_family": line.product_family,
+                        "product_type": line.product_type,
+                        "ambiguity_flags": line.ambiguity_flags,
+                        "review_reason": line.review_reason,
+                        "needs_review": line.needs_review,
+                        "match_text": line.match_text,
+                    }
+                    for line in stage_c_lines
+                ]
+                parse_stage_label = "context_stage_c"
+            except Exception:
+                if not current_app.config.get("CONTEXT_PIPELINE_FALLBACK_TO_LEGACY", True):
+                    raise
+                logger.exception(
+                    "Context pipeline failed; falling back to legacy single-pass parsing"
+                )
 
-            vision_payload = _vision_extract_document(
-                file_path,
-                api_key=api_key,
-                model=current_app.config["OPENAI_MODEL"],
-            )
-            parsed_items.extend(vision_payload["items"])
-            document_contexts.append(vision_payload["document_context"])
+        if not parsed_items:
+            for _, file_path in saved_uploads:
+                ext = file_path.suffix.lstrip(".").lower()
+                if ext == "csv":
+                    parsed_items.extend(parse_csv_items(file_path))
+                    continue
+
+                if not api_key:
+                    raise RuntimeError("OPENAI_API_KEY is not configured for image/pdf parsing.")
+
+                vision_payload = _vision_extract_document(
+                    file_path,
+                    api_key=api_key,
+                    model=current_app.config["OPENAI_MODEL"],
+                )
+                parsed_items.extend(vision_payload["items"])
+                document_contexts.append(vision_payload["document_context"])
+        elif api_key:
+            for _, file_path in saved_uploads:
+                ext = file_path.suffix.lstrip(".").lower()
+                if ext == "csv":
+                    continue
+                try:
+                    vision_payload = _vision_extract_document(
+                        file_path,
+                        api_key=api_key,
+                        model=current_app.config["OPENAI_MODEL"],
+                    )
+                    document_contexts.append(vision_payload["document_context"])
+                except Exception:
+                    logger.warning(
+                        "Document context extraction failed for %s",
+                        file_path.name,
+                        exc_info=True,
+                    )
 
         ai_ms = int((time.perf_counter() - t0) * 1000)
         merged_context = merge_document_contexts(document_contexts)
@@ -508,7 +568,8 @@ def upload():
             if synced_context_payload.get("job_notes"):
                 raw_text_lines.append(f"Cloud job notes: {synced_context_payload['job_notes']}")
         raw_text_lines.extend(
-            f"{item['quantity']} {item.get('source_description') or item['description']}"
+            f"{item.get('quantity', 1)} "
+            f"{item.get('source_description') or item.get('raw_text') or item.get('description', '')}"
             for item in parsed_items
         )
         session.raw_ocr_text = "\n".join(raw_text_lines)
@@ -570,7 +631,7 @@ def upload():
     synced_context_payload = _load_json_blob(session.matched_context_json)
     descriptions = [
         enrich_description_for_matching(
-            item["description"],
+            item.get("match_text") or item.get("normalized_description") or item["description"],
             upload_context=upload_context,
             document_context={
                 **merged_context,
@@ -624,7 +685,11 @@ def upload():
     fuzzy_scores = [r["fuzzy_score"] for r in match_results]
     vector_scores = [r["vector_score"] for r in match_results]
     items_matched = sum(1 for r in match_results if r["matched_item_code"])
-    items_below = sum(1 for r in match_results if r["confidence_score"] < threshold)
+    items_below = sum(
+        1
+        for parsed, result in zip(parsed_items, match_results)
+        if result["confidence_score"] < threshold or parsed.get("needs_review")
+    )
     avg_conf = sum(confidence_scores) / len(confidence_scores) if confidence_scores else None
     avg_fuzzy = sum(fuzzy_scores) / len(fuzzy_scores) if fuzzy_scores else None
     avg_vec = sum(vector_scores) / len(vector_scores) if vector_scores else None
@@ -633,7 +698,20 @@ def upload():
         extracted = ExtractedItem(
             session_id=session.id,
             quantity=parsed["quantity"],
-            raw_description=parsed["description"],
+            raw_description=parsed.get("source_description")
+            or parsed.get("description")
+            or parsed.get("raw_text")
+            or "",
+            parse_stage=parse_stage_label,
+            parse_line_id=parsed.get("line_id"),
+            normalized_description=parsed.get("normalized_description"),
+            section_header=parsed.get("section_header"),
+            brand=parsed.get("brand"),
+            color=parsed.get("color"),
+            product_family=parsed.get("product_family"),
+            product_type=parsed.get("product_type"),
+            ambiguity_flags=json.dumps(parsed.get("ambiguity_flags", [])),
+            review_reason=parsed.get("review_reason"),
             matched_item_code=match["matched_item_code"],
             matched_description=match["matched_description"],
             confidence_score=match["confidence_score"],
@@ -806,11 +884,16 @@ def feedback_workflow(session_id):
         ],
     }
 
-    db.session.add(SessionFeedbackEvent(
+    existing_event = SessionFeedbackEvent.query.filter_by(
         session_id=session_id,
         comment=comment,
-        requested_reprocess=True,
-    ))
+    ).first()
+    if not existing_event:
+        db.session.add(SessionFeedbackEvent(
+            session_id=session_id,
+            comment=comment,
+            requested_reprocess=True,
+        ))
     session.session_comment = comment
     session.feedback_reprocess_requested = True
     db.session.commit()
