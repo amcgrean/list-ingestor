@@ -40,6 +40,7 @@
           <th>Matched ERP Item</th>
           <th style="width:130px">Item Code</th>
           <th style="width:110px">Confidence</th>
+          <th style="width:190px">Comment</th>
           <th style="width:70px">OK</th>
         </tr>
       </thead>
@@ -98,6 +99,11 @@
             </span>
           </td>
 
+          <!-- Per-line comment -->
+          <td class="col-comment">
+            <input type="text" class="item-comment input-sm" placeholder="Optional comment (why changed?)" />
+          </td>
+
           <!-- Confirm checkbox -->
           <td class="col-confirm">
             <label class="checkbox-wrap">
@@ -109,6 +115,16 @@
         {% endfor %}
       </tbody>
     </table>
+  </div>
+
+  <div class="feedback-panel">
+    <label for="session-comment" class="provider-label">Session feedback / notes</label>
+    <textarea id="session-comment" class="input-sm" rows="3" placeholder="Tell us what was wrong or missing in this pass..."></textarea>
+    <div class="feedback-actions">
+      <label><input type="checkbox" id="request-reprocess" /> Request AI reprocess with this context</label>
+      <button type="button" class="btn btn-outline btn-sm" id="feedback-workflow-btn">Generate Reprocess Context</button>
+    </div>
+    <pre id="feedback-context" class="raw-text hidden"></pre>
   </div>
 
   <!-- Export bar -->
@@ -134,6 +150,7 @@
   window.SESSION_ID = {{ session.id }};
   window.SAVE_URL = "{{ url_for('main.save_review', session_id=session.id) }}";
   window.ERP_SEARCH_URL = "{{ url_for('main.api_erp_items') }}";
+  window.FEEDBACK_WORKFLOW_URL = "{{ url_for('main.feedback_workflow', session_id=session.id) }}";
 </script>
 <script src="{{ url_for('static', filename='js/review.js') }}"></script>
 {% endblock %}
