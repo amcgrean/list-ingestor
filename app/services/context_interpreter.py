@@ -18,6 +18,9 @@ _STAGE_B_PROMPT = (
     "Input is full-document JSON from a prior extraction pass across one or more uploaded files. "
     "Apply section headers or general notes to following rows until a new header or note overrides them. "
     "Carry shared context across adjacent pages/files when the document structure clearly supports it. "
+    "Expand common construction shorthand and obvious OCR misspellings when confidence is high, "
+    "such as eng->engineered, pt->pressure treated, w/->with, lvl->LVL, ply->plywood, swng->swinging, surfce->surface. "
+    "If a handwritten row is still unclear after using the surrounding context, keep the best normalized form you can but add ambiguity_flags and a short review_reason. "
     "Infer brand, color, product-family, and product-type only when strongly supported. "
     "Mark ambiguity_flags when unclear instead of guessing. "
     "Build normalized_description suitable for ERP SKU matching. "
@@ -76,10 +79,8 @@ class ContextInterpreter:
 
             inherited = line.section_header or current_header
             text = line.raw_text
-            normalized = " ".join(part for part in [inherited, text] if part).strip()
-            ambiguity: list[str] = []
-            if re.search(r"\b(?:misc|unknown|tbd|assorted)\b", text, flags=re.IGNORECASE):
-                ambiguity.append("ambiguous_shorthand")
+            normalized = _normalize_handwritten_text(" ".join(part for part in [inherited, text] if part).strip())
+            ambiguity = _derive_ambiguity_flags(text, normalized)
 
             contextualized.append(
                 ContextualizedLine(
@@ -100,9 +101,16 @@ class ContextInterpreter:
     def _normalize_context_line(self, line: dict[str, Any], raw_lookup: dict[str, RawExtractedLine]) -> ContextualizedLine:
         line_id = str(line.get("line_id", ""))
         raw = raw_lookup.get(line_id)
+        raw_text = str(line.get("raw_text") or (raw.raw_text if raw else ""))
+        normalized_description = _normalize_handwritten_text(str(line.get("normalized_description", "")).strip())
+        combined_ambiguity = _merge_ambiguity_flags(
+            list(line.get("ambiguity_flags", []) or []),
+            _derive_ambiguity_flags(raw_text, normalized_description),
+        )
+        review_reason = str(line.get("review_reason", "")).strip() or "; ".join(combined_ambiguity)
         return ContextualizedLine(
             line_id=line_id,
-            raw_text=str(line.get("raw_text") or (raw.raw_text if raw else "")),
+            raw_text=raw_text,
             inherited_section_header=str(line.get("inherited_section_header", "")),
             brand=str(line.get("brand", "")),
             color=str(line.get("color", "")),
@@ -115,9 +123,9 @@ class ContextInterpreter:
             quantity=float(line.get("quantity", raw.quantity if raw else 1) or 1),
             inferred_use=str(line.get("inferred_use", "")),
             accessory_for_line_id=str(line.get("accessory_for_line_id", "")),
-            normalized_description=str(line.get("normalized_description", "")).strip(),
-            ambiguity_flags=list(line.get("ambiguity_flags", []) or []),
-            review_reason=str(line.get("review_reason", "")),
+            normalized_description=normalized_description,
+            ambiguity_flags=combined_ambiguity,
+            review_reason=review_reason,
             confidence=float(line.get("confidence", 0.0) or 0.0),
         )
 
@@ -149,3 +157,55 @@ def _extract_json(text: str) -> Any:
         if not match:
             raise
         return json.loads(match.group(1))
+
+
+_SHORTHAND_REPLACEMENTS = (
+    (r"\bw/\b", "with"),
+    (r"\bw/o\b", "without"),
+    (r"\beng\b", "engineered"),
+    (r"\bpt\b", "pressure treated"),
+    (r"\btrtd\b", "treated"),
+    (r"\blvl\b", "LVL"),
+    (r"\bply\b", "plywood"),
+    (r"\bswng\b", "swinging"),
+    (r"\bsurfce\b", "surface"),
+    (r"\bhanle\b", "handle"),
+    (r"\bclr\b", "color"),
+)
+
+
+def _normalize_handwritten_text(text: str) -> str:
+    normalized = " ".join(str(text or "").split())
+    if not normalized:
+        return ""
+    for pattern, replacement in _SHORTHAND_REPLACEMENTS:
+        normalized = re.sub(pattern, replacement, normalized, flags=re.IGNORECASE)
+    return normalized
+
+
+def _derive_ambiguity_flags(raw_text: str, normalized_description: str) -> list[str]:
+    source = f"{raw_text} {normalized_description}".strip()
+    if not source:
+        return []
+
+    flags: list[str] = []
+    patterns = (
+        (r"\b(?:misc|unknown|tbd|assorted)\b", "ambiguous_shorthand"),
+        (r"\b\d+/[A-Za-z]+\b|\b[A-Za-z]+/\d+\b", "handwritten_fraction_or_ocr_noise"),
+        (r"\b(?:lye|surfce|hanle|swng)\b", "ocr_spelling_uncertain"),
+        (r"\b\d+x\d+x\d+/\d+\b|\b\d+-\d+\b", "dimension_parse_uncertain"),
+        (r"\([A-Za-z]\)", "single_letter_annotation"),
+    )
+    for pattern, flag in patterns:
+        if re.search(pattern, source, flags=re.IGNORECASE):
+            flags.append(flag)
+    return flags
+
+
+def _merge_ambiguity_flags(*flag_lists: list[str]) -> list[str]:
+    merged: list[str] = []
+    for flags in flag_lists:
+        for flag in flags:
+            if flag and flag not in merged:
+                merged.append(flag)
+    return merged

@@ -19,6 +19,7 @@ numpy==2.2.3
 
 # Image handling (Vision API pre-processing)
 pillow==11.1.0
+pillow-heif==0.18.0
 
 # Data handling / export
 pandas==2.2.3

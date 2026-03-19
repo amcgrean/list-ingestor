@@ -23,7 +23,7 @@
     if (!files || !files.length) return;
     const valid = Array.from(files).filter(isAllowedFile);
     if (!valid.length) {
-      alert("Unsupported file type. Please upload images, PDFs, or CSV files.");
+      alert("Unsupported file type. Please upload images (including HEIC), PDFs, or CSV files.");
       return;
     }
     if (valid.length !== files.length) {

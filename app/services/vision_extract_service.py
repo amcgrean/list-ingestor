@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import io
 import json
 import logging
 import re
@@ -9,10 +10,13 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+from PIL import Image
 from openai import OpenAI
+from pillow_heif import register_heif_opener
 from app.services.upload_context import normalize_document_context
 
 logger = logging.getLogger(__name__)
+register_heif_opener()
 
 _WORKFLOW_CONTEXT = (
     "These uploads are usually customer or competitor material lists in handwritten, typed, or mixed formats. "
@@ -167,9 +171,9 @@ class VisionExtractService:
         return rows
 
     def _build_content(self, file_path: Path) -> dict[str, str]:
-        raw = file_path.read_bytes()
-        b64 = base64.b64encode(raw).decode("utf-8")
         if file_path.suffix.lower() == ".pdf":
+            raw = file_path.read_bytes()
+            b64 = base64.b64encode(raw).decode("utf-8")
             return {
                 "type": "input_file",
                 "filename": file_path.name,
@@ -180,9 +184,26 @@ class VisionExtractService:
             ".jpeg": "image/jpeg",
             ".png": "image/png",
             ".webp": "image/webp",
+            ".heic": "image/jpeg",
+            ".heif": "image/jpeg",
         }
-        mime = mime_map.get(file_path.suffix.lower(), "image/png")
+        raw, mime = self._load_image_bytes(file_path, mime_map)
+        b64 = base64.b64encode(raw).decode("utf-8")
         return {"type": "input_image", "image_url": f"data:{mime};base64,{b64}"}
+
+    def _load_image_bytes(self, file_path: Path, mime_map: dict[str, str]) -> tuple[bytes, str]:
+        suffix = file_path.suffix.lower()
+        if suffix in {".heic", ".heif"}:
+            with Image.open(file_path) as image:
+                image = image.convert("RGB")
+                buffer = io.BytesIO()
+                image.save(buffer, format="JPEG", quality=95)
+            raw = buffer.getvalue()
+            mime = "image/jpeg"
+        else:
+            raw = file_path.read_bytes()
+            mime = mime_map.get(suffix, "image/png")
+        return raw, mime
 
     def _build_multi_content(self, file_paths: list[Path]) -> list[dict[str, str]]:
         content: list[dict[str, str]] = []

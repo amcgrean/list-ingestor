@@ -18,15 +18,19 @@ Images are base64-encoded and sent inline and are never stored.
 from __future__ import annotations
 
 import base64
+import io
 import json
 import logging
 import re
 from pathlib import Path
 from typing import Iterable, Union
 
+from PIL import Image
 from openai import OpenAI
+from pillow_heif import register_heif_opener
 
 logger = logging.getLogger(__name__)
+register_heif_opener()
 
 _BASE_SYSTEM_PROMPT = (
     "You are reading a customer or competitor material list from photos or PDFs. "
@@ -49,6 +53,8 @@ _EXT_TO_MIME = {
     ".jpeg": "image/jpeg",
     ".png": "image/png",
     ".webp": "image/webp",
+    ".heic": "image/jpeg",
+    ".heif": "image/jpeg",
     ".gif": "image/gif",
 }
 
@@ -139,9 +145,18 @@ def _build_image_content(image_source: Union[str, Path, bytes]) -> dict:
         }
 
     path = Path(image_source)
-    mime = _EXT_TO_MIME.get(path.suffix.lower(), "image/jpeg")
-    with open(path, "rb") as fh:
-        raw = fh.read()
+    suffix = path.suffix.lower()
+    if suffix in {".heic", ".heif"}:
+        with Image.open(path) as image:
+            image = image.convert("RGB")
+            buffer = io.BytesIO()
+            image.save(buffer, format="JPEG", quality=95)
+        raw = buffer.getvalue()
+        mime = "image/jpeg"
+    else:
+        mime = _EXT_TO_MIME.get(suffix, "image/jpeg")
+        with open(path, "rb") as fh:
+            raw = fh.read()
     b64 = base64.b64encode(raw).decode("utf-8")
     return {
         "type": "input_image",

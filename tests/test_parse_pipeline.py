@@ -214,6 +214,38 @@ class ParsePipelineTests(unittest.TestCase):
         self.assertEqual(contextualized[0].line_id, "L1")
         self.assertIn("12 boards", contextualized[0].normalized_description)
 
+    def test_context_interpreter_flags_handwritten_uncertainty(self):
+        interpreter = ContextInterpreter(api_key="", model="gpt-4o")
+        contextualized = interpreter.interpret(
+            [RawExtractedLine(line_id="L1", raw_text="master entrance 3/0 (R) 4/9 swng surfce", quantity=1)]
+        )
+
+        self.assertIn("ocr_spelling_uncertain", contextualized[0].ambiguity_flags)
+        self.assertIn("single_letter_annotation", contextualized[0].ambiguity_flags)
+        self.assertIn("swinging", contextualized[0].normalized_description)
+
+    def test_vision_extract_service_heic_uses_jpeg_payload(self):
+        class FakeImage:
+            def convert(self, _mode):
+                return self
+
+            def save(self, buffer, format, quality):
+                buffer.write(b"jpeg-bytes")
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        service = VisionExtractService(api_key="test", model="gpt-4o")
+        with TemporaryDirectory() as tmpdir, patch("app.services.vision_extract_service.Image.open", return_value=FakeImage()):
+            file_path = Path(tmpdir) / "sample.heic"
+            file_path.write_bytes(b"heic")
+            payload = service._build_content(file_path)
+
+        self.assertIn("data:image/jpeg;base64,", payload["image_url"])
+
     def test_vision_extract_service_retries_per_file_when_batch_file_index_missing(self):
         captured_inputs = []
 

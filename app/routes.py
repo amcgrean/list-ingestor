@@ -15,6 +15,8 @@ from typing import Any
 from pathlib import Path
 
 import pandas as pd
+from PIL import Image
+from pillow_heif import register_heif_opener
 from flask import (
     Blueprint,
     Response,
@@ -72,6 +74,7 @@ from services.openai_vision import extract_document_data_from_images as _vision_
 logger = logging.getLogger(__name__)
 main = Blueprint("main", __name__)
 CF_ACCESS_EMAIL_HEADER = "Cf-Access-Authenticated-User-Email"
+register_heif_opener()
 
 
 # ---------------------------------------------------------------------------
@@ -115,6 +118,14 @@ def save_upload(file) -> Path:
     try:
         os.close(fd)
         file.save(tmp_path)
+        saved_path = Path(tmp_path)
+        if saved_path.suffix.lower() in {".heic", ".heif"}:
+            converted_path = saved_path.with_suffix(".jpg")
+            with Image.open(saved_path) as image:
+                image = image.convert("RGB")
+                image.save(converted_path, format="JPEG", quality=95)
+            os.unlink(saved_path)
+            return converted_path
     except Exception:
         try:
             os.unlink(tmp_path)
