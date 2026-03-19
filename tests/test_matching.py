@@ -70,6 +70,28 @@ class MatchingTests(unittest.TestCase):
         result = item_matcher.match_item("lus210 hanger", self.catalog, "sentence-transformers/all-MiniLM-L6-v2")
         self.assertEqual(result["matched_item_code"], "LUS210")
 
+    def test_vector_index_rebuilds_when_catalog_changes_with_same_length(self):
+        class StubVectorIndex:
+            build_calls = 0
+
+            def __init__(self, model_name):
+                self.model_name = model_name
+                self.catalog_refs = []
+
+            def build_index(self, items):
+                StubVectorIndex.build_calls += 1
+                self.catalog_refs = [item.sku for item in items]
+
+        item_matcher.clear_index()
+        catalog_a = [ERPItem(item_code="A1", description="alpha board")]
+        catalog_b = [ERPItem(item_code="A1", description="gamma bracket")]
+
+        with patch("app.services.item_matcher.VectorIndex", StubVectorIndex):
+            item_matcher.build_index(catalog_a, "model-x", cache_key="branch:test")
+            item_matcher.build_index(catalog_b, "model-x", cache_key="branch:test")
+
+        self.assertEqual(StubVectorIndex.build_calls, 2)
+
 
 if __name__ == "__main__":
     unittest.main()

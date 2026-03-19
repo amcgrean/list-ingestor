@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import threading
 import time
+import hashlib
 from typing import Iterable
 
 from sqlalchemy import func
@@ -16,7 +17,7 @@ from app.services.vector_index import VectorIndex
 
 
 _vector_indexes: dict[str, VectorIndex] = {}
-_index_sizes: dict[str, int] = {}
+_index_fingerprints: dict[str, str] = {}
 _index_lock = threading.Lock()  # guards index build so only one thread rebuilds at a time
 
 import logging as _logging
@@ -30,29 +31,53 @@ def normalise_description(text: str) -> str:
     return re.sub(r"\s+", " ", text)
 
 
+def _catalog_fingerprint(items: list[ERPItem]) -> str:
+    """Return a deterministic hash for catalog contents used by the vector index.
+
+    We intentionally include SKU + searchable text so index rebuilds whenever
+    catalog rows change, even if row count stays the same.
+    """
+    digest = hashlib.blake2b(digest_size=16)
+    for item in sorted(items, key=lambda row: (row.sku or "", row.description or "")):
+        digest.update((item.sku or "").encode("utf-8", errors="ignore"))
+        digest.update(b"\x1f")
+        digest.update((item.searchable_text or "").encode("utf-8", errors="ignore"))
+        digest.update(b"\x1e")
+    return digest.hexdigest()
+
+
 def _ensure_vector_index(
     erp_items: Iterable[ERPItem], model_name: str, cache_key: str = "default"
 ) -> VectorIndex:
     items = list(erp_items)
+    fingerprint = _catalog_fingerprint(items)
     vector_index = _vector_indexes.get(cache_key)
-    index_size = _index_sizes.get(cache_key, 0)
+    cached_fingerprint = _index_fingerprints.get(cache_key, "")
     # Fast path: check without lock first
-    if vector_index is not None and index_size == len(items) and vector_index.model_name == model_name:
+    if (
+        vector_index is not None
+        and cached_fingerprint == fingerprint
+        and vector_index.model_name == model_name
+    ):
         return vector_index
     # Slow path: only one thread builds the index at a time
     with _index_lock:
         vector_index = _vector_indexes.get(cache_key)
-        index_size = _index_sizes.get(cache_key, 0)
+        cached_fingerprint = _index_fingerprints.get(cache_key, "")
         # Re-check inside the lock in case another thread just built it
-        if vector_index is None or index_size != len(items) or vector_index.model_name != model_name:
+        if (
+            vector_index is None
+            or cached_fingerprint != fingerprint
+            or vector_index.model_name != model_name
+        ):
             idx = VectorIndex(model_name=model_name)
             idx.build_index(items)
             _vector_indexes[cache_key] = idx
             if idx.catalog_refs:
                 # Only cache as valid when the index actually has content.
                 # If catalog_refs is empty (e.g. model failed to load), leave
-                # _index_size at its previous value so the next request retries.
-                _index_sizes[cache_key] = len(items)
+                # fingerprint at its previous value so the next request retries.
+                _index_fingerprints[cache_key] = fingerprint
             else:
                 _log.warning(
                     "vector_index_empty: index built for %d items but catalog_refs is empty "
@@ -75,10 +100,10 @@ def get_index(cache_key: str = "default") -> VectorIndex | None:
 def clear_index(cache_key: str | None = None) -> None:
     if cache_key is None:
         _vector_indexes.clear()
-        _index_sizes.clear()
+        _index_fingerprints.clear()
         return
     _vector_indexes.pop(cache_key, None)
-    _index_sizes.pop(cache_key, None)
+    _index_fingerprints.pop(cache_key, None)
 
 
 def _alias_lookup(description: str):
