@@ -155,6 +155,20 @@ class ParsePipelineTests(unittest.TestCase):
         self.assertIn("Treat all provided pages/images as one document set", prompt)
         self.assertIn("User-provided upload context", prompt)
 
+    def test_vision_extract_service_normalizes_bad_quantity_strings_without_crashing(self):
+        service = VisionExtractService(api_key="test", model="gpt-4o")
+        normalized = service._normalize_line(
+            1,
+            {
+                "line_id": "L1",
+                "raw_text": "deck board",
+                "quantity": "1-1/16",
+                "quantity_raw": "1-1/16",
+            },
+        )
+
+        self.assertEqual(normalized["quantity"], 1.0)
+
     def test_context_interpreter_passes_upload_context_to_model_prompt(self):
         captured = {}
 

@@ -4,6 +4,7 @@ import base64
 import json
 import logging
 import re
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -271,7 +272,7 @@ class VisionExtractService:
             "section_header": str(line.get("section_header", "")).strip(),
             "section_type": str(line.get("section_type", "unknown")),
             "quantity_raw": str(line.get("quantity_raw", "")),
-            "quantity": float(line.get("quantity", 1) or 1),
+            "quantity": _coerce_quantity(line.get("quantity", 1)),
             "dimensions_raw": str(line.get("dimensions_raw", "")),
             "length": str(line.get("length", "")),
             "width": str(line.get("width", "")),
@@ -317,3 +318,27 @@ def _merge_document_contexts(contexts: list[dict[str, Any]]) -> dict[str, Any]:
                 if value not in merged[key]:
                     merged[key].append(value)
     return merged
+
+
+def _coerce_quantity(value: Any) -> float:
+    if value in (None, ""):
+        return 1.0
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    text = str(value).strip()
+    if not text:
+        return 1.0
+
+    normalized = text.replace(",", "")
+    if re.fullmatch(r"\d+(?:\.\d+)?", normalized):
+        return float(normalized)
+
+    if re.fullmatch(r"\d+\s+\d+/\d+", normalized):
+        whole, frac = normalized.split(None, 1)
+        return float(int(whole) + Fraction(frac))
+
+    if re.fullmatch(r"\d+/\d+", normalized):
+        return float(Fraction(normalized))
+
+    return 1.0
