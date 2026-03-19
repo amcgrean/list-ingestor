@@ -1,6 +1,7 @@
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from app.services.context_interpreter import ContextInterpreter
 from app.services.parse_pipeline import stage_a_extract, stage_c_prepare_for_matching
@@ -77,21 +78,41 @@ class ParsePipelineTests(unittest.TestCase):
 
     def test_stage_a_prefixes_line_ids_per_file(self):
         class StubVisionService:
-            def extract(self, _file_path):
+            def extract_many(self, _file_paths, upload_context=""):
+                self.upload_context = upload_context
                 return [
                     {"line_id": "L1", "raw_text": "first row"},
                     {"line_id": "L2", "raw_text": "second row"},
+                    {"file_index": 2, "line_id": "L1", "raw_text": "third row"},
+                    {"file_index": 2, "line_id": "L2", "raw_text": "fourth row"},
                 ]
 
         lines = stage_a_extract(
             [Path("one.pdf"), Path("two.pdf")],
             StubVisionService(),
+            upload_context="Customer competitor comparison list",
         )
 
         self.assertEqual(
             [line.line_id for line in lines],
             ["F1-L1", "F1-L2", "F2-L1", "F2-L2"],
         )
+
+    def test_stage_a_keeps_original_file_order_for_mixed_uploads(self):
+        class StubVisionService:
+            def extract_many(self, _file_paths, upload_context=""):
+                return [{"file_index": 1, "line_id": "L1", "raw_text": "image row"}]
+
+            def extract(self, _file_path, upload_context=""):
+                return [{"line_id": "L1", "raw_text": "csv row"}]
+
+        lines = stage_a_extract(
+            [Path("notes.csv"), Path("photo.jpg")],
+            StubVisionService(),
+        )
+
+        self.assertEqual([line.line_id for line in lines], ["F1-L1", "F2-L1"])
+        self.assertEqual([line.raw_text for line in lines], ["csv row", "image row"])
 
     def test_vision_extract_service_uses_webp_mime(self):
         with TemporaryDirectory() as tmpdir:
@@ -102,6 +123,42 @@ class ParsePipelineTests(unittest.TestCase):
             payload = service._build_content(file_path)
 
         self.assertIn("data:image/webp;base64,", payload["image_url"])
+
+    def test_stage_a_prompt_includes_upload_context_and_document_scope(self):
+        service = VisionExtractService(api_key="test", model="gpt-4o")
+        prompt = service._build_stage_a_prompt(
+            file_count=2,
+            upload_context="Customer list, some rows inherit color from notes.",
+        )
+
+        self.assertIn("customer or competitor material lists", prompt)
+        self.assertIn("Treat all provided pages/images as one document set", prompt)
+        self.assertIn("User-provided upload context", prompt)
+
+    def test_context_interpreter_passes_upload_context_to_model_prompt(self):
+        captured = {}
+
+        class FakeResponses:
+            def create(self, **kwargs):
+                captured["input"] = kwargs["input"]
+                class Response:
+                    output_text = '{"contextualized_lines":[]}'
+                return Response()
+
+        class FakeClient:
+            def __init__(self, api_key):
+                self.responses = FakeResponses()
+
+        interpreter = ContextInterpreter(api_key="test", model="gpt-4o")
+        with patch("app.services.context_interpreter.OpenAI", FakeClient):
+            interpreter.interpret(
+                [RawExtractedLine(line_id="L1", raw_text="12 boards")],
+                upload_context="Competitor takeoff with shorthand notes",
+            )
+
+        prompt_text = captured["input"][0]["content"][0]["text"]
+        self.assertIn("customer or competitor material list", prompt_text)
+        self.assertIn("Competitor takeoff with shorthand notes", prompt_text)
 
 
 if __name__ == "__main__":

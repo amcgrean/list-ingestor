@@ -15,12 +15,17 @@ from app.services.vision_extract_service import VisionExtractService
 logger = logging.getLogger(__name__)
 
 
-def parse_uploads(upload_paths: list[Path], api_key: str, session_id: int | None = None) -> tuple[list[RawExtractedLine], list[ContextualizedLine], list[MatchReadyLine]]:
+def parse_uploads(
+    upload_paths: list[Path],
+    api_key: str,
+    session_id: int | None = None,
+    upload_context: str = "",
+) -> tuple[list[RawExtractedLine], list[ContextualizedLine], list[MatchReadyLine]]:
     vision_service = VisionExtractService(api_key=api_key, model=current_app.config["OPENAI_EXTRACTION_MODEL"])
     interpreter = ContextInterpreter(api_key=api_key, model=current_app.config["OPENAI_CONTEXT_MODEL"])
 
-    stage_a = stage_a_extract(upload_paths, vision_service)
-    stage_b = stage_b_interpret(stage_a, interpreter)
+    stage_a = stage_a_extract(upload_paths, vision_service, upload_context=upload_context)
+    stage_b = stage_b_interpret(stage_a, interpreter, upload_context=upload_context)
     stage_c = stage_c_prepare_for_matching(stage_b)
 
     if current_app.config.get("PARSE_DEBUG_SAVE_JSON"):
@@ -29,11 +34,42 @@ def parse_uploads(upload_paths: list[Path], api_key: str, session_id: int | None
     return stage_a, stage_b, stage_c
 
 
-def stage_a_extract(upload_paths: list[Path], vision_service: VisionExtractService) -> list[RawExtractedLine]:
+def stage_a_extract(
+    upload_paths: list[Path],
+    vision_service: VisionExtractService,
+    upload_context: str = "",
+) -> list[RawExtractedLine]:
     lines: list[RawExtractedLine] = []
     order = 0
+    visual_entries = [
+        (original_index, path)
+        for original_index, path in enumerate(upload_paths, start=1)
+        if path.suffix.lower() != ".csv"
+    ]
+    extracted_by_file: dict[int, list[dict[str, Any]]] = {}
+
+    if visual_entries:
+        extracted_visual = vision_service.extract_many(
+            [path for _, path in visual_entries],
+            upload_context=upload_context,
+        )
+        visual_index_map = {
+            visual_position: original_index
+            for visual_position, (original_index, _) in enumerate(visual_entries, start=1)
+        }
+        for row in extracted_visual:
+            visual_file_index = int(row.get("file_index", 1) or 1)
+            file_index = visual_index_map.get(visual_file_index, visual_file_index)
+            row = {**row, "file_index": file_index}
+            extracted_by_file.setdefault(file_index, []).append(row)
+
     for file_index, file_path in enumerate(upload_paths, start=1):
-        extracted = vision_service.extract(file_path)
+        if file_path.suffix.lower() != ".csv":
+            continue
+        extracted_by_file[file_index] = vision_service.extract(file_path, upload_context=upload_context)
+
+    for file_index in range(1, len(upload_paths) + 1):
+        extracted = extracted_by_file.get(file_index, [])
         for row in extracted:
             order += 1
             raw_line_id = str(row.get("line_id") or f"L{order}")
@@ -61,8 +97,12 @@ def stage_a_extract(upload_paths: list[Path], vision_service: VisionExtractServi
     return lines
 
 
-def stage_b_interpret(stage_a_lines: list[RawExtractedLine], interpreter: ContextInterpreter) -> list[ContextualizedLine]:
-    return interpreter.interpret(stage_a_lines)
+def stage_b_interpret(
+    stage_a_lines: list[RawExtractedLine],
+    interpreter: ContextInterpreter,
+    upload_context: str = "",
+) -> list[ContextualizedLine]:
+    return interpreter.interpret(stage_a_lines, upload_context=upload_context)
 
 
 def stage_c_prepare_for_matching(stage_b_lines: list[ContextualizedLine]) -> list[MatchReadyLine]:

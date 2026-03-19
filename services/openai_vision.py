@@ -22,16 +22,17 @@ import json
 import logging
 import re
 from pathlib import Path
-from typing import Union
+from typing import Iterable, Union
 
 from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
-_SYSTEM_PROMPT = (
-    "You are reading a contractor material list from a photo or PDF. "
+_BASE_SYSTEM_PROMPT = (
+    "You are reading a customer or competitor material list from photos or PDFs. "
+    "These lists may be handwritten, typed, or mixed. "
     "Extract each material line with quantity and a fully qualified description. "
-    "Apply document-level context when it clearly governs later rows. "
+    "Apply document-level context when it clearly governs later rows, including headings, general notes, side annotations, and later or earlier pages in the same upload set. "
     "For example, if a heading says 'Trex Toasted Sand' and the rows below list generic sizes, "
     "include the Trex/Toasted Sand context in those line-item descriptions unless a later row overrides it. "
     "Also capture customer names, job names, and job notes when present. "
@@ -56,13 +57,31 @@ def extract_document_data_from_image(
     image_source: Union[str, Path, bytes],
     api_key: str,
     model: str = "gpt-4o",
+    upload_context: str = "",
 ) -> dict:
     """Send an image to the OpenAI Responses API and return items plus context."""
+    return extract_document_data_from_images(
+        [image_source],
+        api_key=api_key,
+        model=model,
+        upload_context=upload_context,
+    )
+
+
+def extract_document_data_from_images(
+    image_sources: Iterable[Union[str, Path, bytes]],
+    api_key: str,
+    model: str = "gpt-4o",
+    upload_context: str = "",
+) -> dict:
+    """Send one or more images/PDFs to the OpenAI Responses API and return items plus context."""
     if not api_key:
         raise ValueError("api_key must not be empty")
 
     client = OpenAI(api_key=api_key)
-    image_content = _build_image_content(image_source)
+    image_sources = list(image_sources)
+    content = _build_image_contents(image_sources)
+    prompt = _build_system_prompt(upload_context=upload_context, file_count=len(image_sources))
 
     try:
         response = client.responses.create(
@@ -71,8 +90,8 @@ def extract_document_data_from_image(
                 {
                     "role": "user",
                     "content": [
-                        {"type": "input_text", "text": _SYSTEM_PROMPT},
-                        image_content,
+                        {"type": "input_text", "text": prompt},
+                        *content,
                     ],
                 }
             ],
@@ -91,9 +110,15 @@ def extract_items_from_image(
     image_source: Union[str, Path, bytes],
     api_key: str,
     model: str = "gpt-4o",
+    upload_context: str = "",
 ) -> list[dict]:
     """Backward-compatible helper that returns only extracted items."""
-    payload = extract_document_data_from_image(image_source, api_key=api_key, model=model)
+    payload = extract_document_data_from_image(
+        image_source,
+        api_key=api_key,
+        model=model,
+        upload_context=upload_context,
+    )
     return payload["items"]
 
 
@@ -122,6 +147,28 @@ def _build_image_content(image_source: Union[str, Path, bytes]) -> dict:
         "type": "input_image",
         "image_url": f"data:{mime};base64,{b64}",
     }
+
+
+def _build_image_contents(image_sources: list[Union[str, Path, bytes]]) -> list[dict]:
+    content: list[dict] = []
+    for idx, image_source in enumerate(image_sources, start=1):
+        if isinstance(image_source, (str, Path)):
+            label = Path(str(image_source)).name
+        else:
+            label = f"inline-{idx}.jpg"
+        content.append({"type": "input_text", "text": f"File {idx}: {label}"})
+        content.append(_build_image_content(image_source))
+    return content
+
+
+def _build_system_prompt(upload_context: str = "", file_count: int = 1) -> str:
+    prompt = _BASE_SYSTEM_PROMPT
+    if file_count > 1:
+        prompt += " Treat all provided files as one related document set and resolve sparse rows using the full set when clearly supported."
+    upload_context = " ".join(str(upload_context or "").split())
+    if upload_context:
+        prompt += f" User-provided upload context: {upload_context}."
+    return prompt
 
 
 def _parse_json_response(text: str) -> dict:

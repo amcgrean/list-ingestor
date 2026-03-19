@@ -19,6 +19,16 @@ sys.modules.setdefault("openai_vision", openai_vision)
 
 
 class OpenAIVisionParsingTests(unittest.TestCase):
+    def test_prompt_includes_upload_context_and_multi_file_scope(self):
+        prompt = openai_vision._build_system_prompt(
+            upload_context="Customer list with handwritten notes",
+            file_count=2,
+        )
+
+        self.assertIn("customer or competitor material list", prompt)
+        self.assertIn("Treat all provided files as one related document set", prompt)
+        self.assertIn("Customer list with handwritten notes", prompt)
+
     def test_parses_structured_context_payload(self):
         payload = {
             "document_context": {

@@ -12,23 +12,12 @@ from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
-
-_STAGE_A_PROMPT = (
-    "Read this contractor material list exactly as written. "
-    "Return strict JSON only as an array named lines. Preserve order and hierarchy. "
-    "Identify probable section headers, child items, accessories, and notes. "
-    "Extract quantities and dimensions but do not over-infer missing details. "
-    "Each line must include: line_id, raw_text, section_header, section_type, quantity_raw, quantity, "
-    "dimensions_raw, length, width, height, unit, indentation_level, bullet_style, source_page, source_order, "
-    "confidence, unresolved_tokens."
-)
-
-_LEGACY_PROMPT = (
-    "You are reading a contractor material list from a photo or PDF. "
-    "Extract each line item with quantity and description. "
-    "Return ONLY a JSON array with no surrounding markdown. "
-    "Each element must have quantity (number) and description (string). "
-    "Use quantity=1 when missing and preserve material measurements/sizes."
+_WORKFLOW_CONTEXT = (
+    "These uploads are usually customer or competitor material lists in handwritten, typed, or mixed formats. "
+    "Treat all provided pages/images as one document set when more than one file is supplied. "
+    "Pay attention to the full context of the list because some rows are shorthand and inherit important details "
+    "from headings, notes, legends, side annotations, or nearby pages. "
+    "Preserve uncertainty instead of guessing, but do apply shared context when it is clearly supported by the document."
 )
 
 
@@ -37,20 +26,32 @@ class VisionExtractService:
         self.api_key = api_key
         self.model = model
 
-    def extract(self, file_path: Path) -> list[dict[str, Any]]:
-        ext = file_path.suffix.lower()
-        if ext == ".csv":
-            return self._extract_csv(file_path)
+    def extract(self, file_path: Path, upload_context: str = "") -> list[dict[str, Any]]:
+        return self.extract_many([file_path], upload_context=upload_context)
+
+    def extract_many(self, file_paths: list[Path], upload_context: str = "") -> list[dict[str, Any]]:
+        if not file_paths:
+            return []
+
+        if all(path.suffix.lower() == ".csv" for path in file_paths):
+            combined: list[dict[str, Any]] = []
+            for file_index, path in enumerate(file_paths, start=1):
+                for row in self._extract_csv(path):
+                    normalized = self._normalize_line(len(combined) + 1, row, file_index=file_index)
+                    if normalized["raw_text"]:
+                        combined.append(normalized)
+            return combined
 
         if not self.api_key:
             raise RuntimeError("OPENAI_API_KEY is not configured for image/pdf parsing.")
 
         client = OpenAI(api_key=self.api_key)
-        content = self._build_content(file_path)
+        content = self._build_multi_content(file_paths)
+        prompt = self._build_stage_a_prompt(file_count=len(file_paths), upload_context=upload_context)
         try:
             response = client.responses.create(
                 model=self.model,
-                input=[{"role": "user", "content": [{"type": "input_text", "text": _STAGE_A_PROMPT}, content]}],
+                input=[{"role": "user", "content": [{"type": "input_text", "text": prompt}, *content]}],
             )
             parsed = _extract_json(response.output_text)
             lines = parsed.get("lines", parsed if isinstance(parsed, list) else [])
@@ -60,7 +61,7 @@ class VisionExtractService:
             logger.exception("Stage A extraction failed")
             raise RuntimeError(f"Stage A extraction failed: {exc}") from exc
 
-    def extract_legacy_items(self, file_path: Path) -> list[dict[str, Any]]:
+    def extract_legacy_items(self, file_path: Path, upload_context: str = "") -> list[dict[str, Any]]:
         if file_path.suffix.lower() == ".csv":
             return [{"quantity": row["quantity"], "description": row["raw_text"]} for row in self._extract_csv(file_path)]
         if not self.api_key:
@@ -70,7 +71,7 @@ class VisionExtractService:
         content = self._build_content(file_path)
         response = client.responses.create(
             model=self.model,
-            input=[{"role": "user", "content": [{"type": "input_text", "text": _LEGACY_PROMPT}, content]}],
+            input=[{"role": "user", "content": [{"type": "input_text", "text": self._build_legacy_prompt(upload_context=upload_context)}, content]}],
         )
         parsed = _extract_json(response.output_text)
         rows = parsed if isinstance(parsed, list) else parsed.get("items", [])
@@ -148,8 +149,49 @@ class VisionExtractService:
         mime = mime_map.get(file_path.suffix.lower(), "image/png")
         return {"type": "input_image", "image_url": f"data:{mime};base64,{b64}"}
 
-    def _normalize_line(self, idx: int, line: dict[str, Any]) -> dict[str, Any]:
+    def _build_multi_content(self, file_paths: list[Path]) -> list[dict[str, str]]:
+        content: list[dict[str, str]] = []
+        for file_index, path in enumerate(file_paths, start=1):
+            content.append({"type": "input_text", "text": f"File {file_index}: {path.name}"})
+            content.append(self._build_content(path))
+        return content
+
+    def _build_stage_a_prompt(self, file_count: int, upload_context: str = "") -> str:
+        prompt = (
+            f"{_WORKFLOW_CONTEXT} "
+            f"You are extracting raw lines from {'multiple related uploads' if file_count > 1 else 'a single uploaded list'}. "
+            "Read the material list exactly as written. "
+            "Return strict JSON only as an object with key lines. "
+            "Preserve order, hierarchy, and note lines. "
+            "Identify probable section headers, child items, accessories, carry-down notes, and annotations. "
+            "Extract quantities and dimensions but do not over-infer missing details. "
+            "When a row inherits brand, color, material, or product-family context from a heading or general note, "
+            "keep the raw row text intact and capture that relationship through section_header and unresolved_tokens rather than silently rewriting the row. "
+            "Each line must include: file_index, line_id, raw_text, section_header, section_type, quantity_raw, quantity, "
+            "dimensions_raw, length, width, height, unit, indentation_level, bullet_style, source_page, source_order, "
+            "confidence, unresolved_tokens."
+        )
+        upload_context = " ".join(upload_context.split())
+        if upload_context:
+            prompt += f" User-provided upload context: {upload_context}."
+        return prompt
+
+    def _build_legacy_prompt(self, upload_context: str = "") -> str:
+        prompt = (
+            f"{_WORKFLOW_CONTEXT} "
+            "Extract each line item with quantity and description. "
+            "Return ONLY a JSON array with no surrounding markdown. "
+            "Each element must have quantity (number) and description (string). "
+            "Use quantity=1 when missing and preserve material measurements/sizes."
+        )
+        upload_context = " ".join(upload_context.split())
+        if upload_context:
+            prompt += f" User-provided upload context: {upload_context}."
+        return prompt
+
+    def _normalize_line(self, idx: int, line: dict[str, Any], file_index: int | None = None) -> dict[str, Any]:
         return {
+            "file_index": int(line.get("file_index", file_index or 1) or 1),
             "line_id": str(line.get("line_id") or f"L{idx}"),
             "raw_text": str(line.get("raw_text", "")).strip(),
             "section_header": str(line.get("section_header", "")).strip(),

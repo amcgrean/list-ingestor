@@ -13,10 +13,12 @@ from app.services.parse_types import ContextualizedLine, RawExtractedLine
 logger = logging.getLogger(__name__)
 
 _STAGE_B_PROMPT = (
-    "You are resolving hierarchical context in a contractor material list. "
-    "Input is full-document JSON from a prior extraction pass. "
-    "Apply section headers to following rows until a new header appears. "
-    "Infer brand/color/product-family/product-type only when strongly supported. "
+    "You are resolving hierarchical context in a customer or competitor material list. "
+    "The source may be handwritten, typed, or mixed, and sparse rows often inherit detail from broader notes or headers. "
+    "Input is full-document JSON from a prior extraction pass across one or more uploaded files. "
+    "Apply section headers or general notes to following rows until a new header or note overrides them. "
+    "Carry shared context across adjacent pages/files when the document structure clearly supports it. "
+    "Infer brand, color, product-family, and product-type only when strongly supported. "
     "Mark ambiguity_flags when unclear instead of guessing. "
     "Build normalized_description suitable for ERP SKU matching. "
     "Return strict JSON only with key contextualized_lines."
@@ -28,7 +30,7 @@ class ContextInterpreter:
         self.api_key = api_key
         self.model = model
 
-    def interpret(self, stage_a_lines: list[RawExtractedLine]) -> list[ContextualizedLine]:
+    def interpret(self, stage_a_lines: list[RawExtractedLine], upload_context: str = "") -> list[ContextualizedLine]:
         if not stage_a_lines:
             return []
 
@@ -39,13 +41,17 @@ class ContextInterpreter:
         raw_lookup = {line.line_id: line for line in stage_a_lines}
         client = OpenAI(api_key=self.api_key)
         try:
+            prompt = _STAGE_B_PROMPT
+            upload_context = " ".join(upload_context.split())
+            if upload_context:
+                prompt += f" User-provided upload context: {upload_context}."
             response = client.responses.create(
                 model=self.model,
                 input=[
                     {
                         "role": "user",
                         "content": [
-                            {"type": "input_text", "text": _STAGE_B_PROMPT},
+                            {"type": "input_text", "text": prompt},
                             {"type": "input_text", "text": json.dumps({"lines": payload})},
                         ],
                     }

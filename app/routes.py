@@ -67,7 +67,7 @@ import sys, os as _os
 _PROJECT_ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
-from services.openai_vision import extract_document_data_from_image as _vision_extract_document
+from services.openai_vision import extract_document_data_from_images as _vision_extract_documents
 
 logger = logging.getLogger(__name__)
 main = Blueprint("main", __name__)
@@ -455,6 +455,7 @@ def upload():
                     upload_paths,
                     api_key=api_key,
                     session_id=session.id,
+                    upload_context=upload_context,
                 )
                 parsed_items = [
                     {
@@ -486,38 +487,48 @@ def upload():
                 )
 
         if not parsed_items:
+            csv_uploads = []
+            visual_uploads = []
             for _, file_path in saved_uploads:
                 ext = file_path.suffix.lstrip(".").lower()
                 if ext == "csv":
-                    parsed_items.extend(parse_csv_items(file_path))
-                    continue
+                    csv_uploads.append(file_path)
+                else:
+                    visual_uploads.append(file_path)
 
+            for file_path in csv_uploads:
+                parsed_items.extend(parse_csv_items(file_path))
+
+            if visual_uploads:
                 if not api_key:
                     raise RuntimeError("OPENAI_API_KEY is not configured for image/pdf parsing.")
 
-                vision_payload = _vision_extract_document(
-                    file_path,
+                vision_payload = _vision_extract_documents(
+                    visual_uploads,
                     api_key=api_key,
                     model=current_app.config["OPENAI_MODEL"],
+                    upload_context=upload_context,
                 )
                 parsed_items.extend(vision_payload["items"])
                 document_contexts.append(vision_payload["document_context"])
         elif api_key:
-            for _, file_path in saved_uploads:
-                ext = file_path.suffix.lstrip(".").lower()
-                if ext == "csv":
-                    continue
+            visual_uploads = [
+                file_path
+                for _, file_path in saved_uploads
+                if file_path.suffix.lstrip(".").lower() != "csv"
+            ]
+            if visual_uploads:
                 try:
-                    vision_payload = _vision_extract_document(
-                        file_path,
+                    vision_payload = _vision_extract_documents(
+                        visual_uploads,
                         api_key=api_key,
                         model=current_app.config["OPENAI_MODEL"],
+                        upload_context=upload_context,
                     )
                     document_contexts.append(vision_payload["document_context"])
                 except Exception:
                     logger.warning(
-                        "Document context extraction failed for %s",
-                        file_path.name,
+                        "Document context extraction failed for uploaded batch",
                         exc_info=True,
                     )
 
