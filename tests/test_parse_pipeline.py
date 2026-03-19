@@ -78,16 +78,19 @@ class ParsePipelineTests(unittest.TestCase):
 
     def test_stage_a_prefixes_line_ids_per_file(self):
         class StubVisionService:
-            def extract_many(self, _file_paths, upload_context=""):
+            def extract_document(self, _file_paths, upload_context=""):
                 self.upload_context = upload_context
-                return [
-                    {"line_id": "L1", "raw_text": "first row"},
-                    {"line_id": "L2", "raw_text": "second row"},
-                    {"file_index": 2, "line_id": "L1", "raw_text": "third row"},
-                    {"file_index": 2, "line_id": "L2", "raw_text": "fourth row"},
-                ]
+                return {
+                    "document_context": {},
+                    "lines": [
+                        {"line_id": "L1", "raw_text": "first row"},
+                        {"line_id": "L2", "raw_text": "second row"},
+                        {"file_index": 2, "line_id": "L1", "raw_text": "third row"},
+                        {"file_index": 2, "line_id": "L2", "raw_text": "fourth row"},
+                    ],
+                }
 
-        lines = stage_a_extract(
+        lines, context = stage_a_extract(
             [Path("one.pdf"), Path("two.pdf")],
             StubVisionService(),
             upload_context="Customer competitor comparison list",
@@ -97,22 +100,39 @@ class ParsePipelineTests(unittest.TestCase):
             [line.line_id for line in lines],
             ["F1-L1", "F1-L2", "F2-L1", "F2-L2"],
         )
+        self.assertEqual(context, {})
 
     def test_stage_a_keeps_original_file_order_for_mixed_uploads(self):
         class StubVisionService:
-            def extract_many(self, _file_paths, upload_context=""):
-                return [{"file_index": 1, "line_id": "L1", "raw_text": "image row"}]
+            def extract_document(self, _file_paths, upload_context=""):
+                return {
+                    "document_context": {},
+                    "lines": [{"file_index": 1, "line_id": "L1", "raw_text": "image row"}],
+                }
 
             def extract(self, _file_path, upload_context=""):
                 return [{"line_id": "L1", "raw_text": "csv row"}]
 
-        lines = stage_a_extract(
+        lines, _ = stage_a_extract(
             [Path("notes.csv"), Path("photo.jpg")],
             StubVisionService(),
         )
 
         self.assertEqual([line.line_id for line in lines], ["F1-L1", "F2-L1"])
         self.assertEqual([line.raw_text for line in lines], ["csv row", "image row"])
+
+    def test_stage_a_returns_document_context_from_vision_service(self):
+        class StubVisionService:
+            def extract_document(self, _file_paths, upload_context=""):
+                return {
+                    "document_context": {"customer_name": "Smith", "global_material_context": ["Trex"]},
+                    "lines": [{"file_index": 1, "line_id": "L1", "raw_text": "12 boards"}],
+                }
+
+        lines, context = stage_a_extract([Path("one.jpg")], StubVisionService())
+
+        self.assertEqual([line.line_id for line in lines], ["F1-L1"])
+        self.assertEqual(context["customer_name"], "Smith")
 
     def test_vision_extract_service_uses_webp_mime(self):
         with TemporaryDirectory() as tmpdir:
@@ -159,6 +179,72 @@ class ParsePipelineTests(unittest.TestCase):
         prompt_text = captured["input"][0]["content"][0]["text"]
         self.assertIn("customer or competitor material list", prompt_text)
         self.assertIn("Competitor takeoff with shorthand notes", prompt_text)
+
+    def test_context_interpreter_falls_back_when_model_returns_unknown_line_ids(self):
+        class FakeResponses:
+            def create(self, **kwargs):
+                class Response:
+                    output_text = '{"contextualized_lines":[{"line_id":"UNKNOWN","raw_text":"bad"}]}'
+                return Response()
+
+        class FakeClient:
+            def __init__(self, api_key):
+                self.responses = FakeResponses()
+
+        interpreter = ContextInterpreter(api_key="test", model="gpt-4o")
+        with patch("app.services.context_interpreter.OpenAI", FakeClient):
+            contextualized = interpreter.interpret(
+                [RawExtractedLine(line_id="L1", raw_text="12 boards", section_header="Trex", quantity=12)]
+            )
+
+        self.assertEqual(contextualized[0].line_id, "L1")
+        self.assertIn("12 boards", contextualized[0].normalized_description)
+
+    def test_vision_extract_service_retries_per_file_when_batch_file_index_missing(self):
+        captured_inputs = []
+
+        class FakeResponses:
+            def __init__(self):
+                self.calls = 0
+
+            def create(self, **kwargs):
+                self.calls += 1
+                captured_inputs.append(kwargs["input"])
+
+                class Response:
+                    pass
+
+                response = Response()
+                if self.calls == 1:
+                    response.output_text = (
+                        '{"document_context":{"customer_name":"Smith"},'
+                        '"lines":[{"line_id":"L1","raw_text":"first row"},{"line_id":"L2","raw_text":"second row"}]}'
+                    )
+                elif self.calls == 2:
+                    response.output_text = '{"document_context":{},"lines":[{"line_id":"L1","raw_text":"file one row"}]}'
+                else:
+                    response.output_text = '{"document_context":{},"lines":[{"line_id":"L1","raw_text":"file two row"}]}'
+                return response
+
+        class FakeClient:
+            def __init__(self, api_key):
+                self.responses = FakeResponses()
+
+        service = VisionExtractService(api_key="test", model="gpt-4o")
+        with TemporaryDirectory() as tmpdir, patch("app.services.vision_extract_service.OpenAI", FakeClient):
+            first = Path(tmpdir) / "one.jpg"
+            second = Path(tmpdir) / "two.jpg"
+            first.write_bytes(b"jpg")
+            second.write_bytes(b"jpg")
+
+            payload = service.extract_document([first, second], upload_context="Shared notes")
+
+        self.assertEqual(
+            [line["file_index"] for line in payload["lines"]],
+            [1, 2],
+        )
+        self.assertEqual(payload["document_context"]["customer_name"], "Smith")
+        self.assertEqual(len(captured_inputs), 3)
 
 
 if __name__ == "__main__":

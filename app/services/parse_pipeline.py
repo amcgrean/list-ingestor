@@ -20,27 +20,28 @@ def parse_uploads(
     api_key: str,
     session_id: int | None = None,
     upload_context: str = "",
-) -> tuple[list[RawExtractedLine], list[ContextualizedLine], list[MatchReadyLine]]:
+) -> tuple[list[RawExtractedLine], list[ContextualizedLine], list[MatchReadyLine], dict[str, Any]]:
     vision_service = VisionExtractService(api_key=api_key, model=current_app.config["OPENAI_EXTRACTION_MODEL"])
     interpreter = ContextInterpreter(api_key=api_key, model=current_app.config["OPENAI_CONTEXT_MODEL"])
 
-    stage_a = stage_a_extract(upload_paths, vision_service, upload_context=upload_context)
+    stage_a, stage_a_context = stage_a_extract(upload_paths, vision_service, upload_context=upload_context)
     stage_b = stage_b_interpret(stage_a, interpreter, upload_context=upload_context)
     stage_c = stage_c_prepare_for_matching(stage_b)
 
     if current_app.config.get("PARSE_DEBUG_SAVE_JSON"):
         _save_debug_artifacts(session_id, stage_a, stage_b, stage_c)
 
-    return stage_a, stage_b, stage_c
+    return stage_a, stage_b, stage_c, stage_a_context
 
 
 def stage_a_extract(
     upload_paths: list[Path],
     vision_service: VisionExtractService,
     upload_context: str = "",
-) -> list[RawExtractedLine]:
+) -> tuple[list[RawExtractedLine], dict[str, Any]]:
     lines: list[RawExtractedLine] = []
     order = 0
+    merged_context: dict[str, Any] = {}
     visual_entries = [
         (original_index, path)
         for original_index, path in enumerate(upload_paths, start=1)
@@ -49,10 +50,12 @@ def stage_a_extract(
     extracted_by_file: dict[int, list[dict[str, Any]]] = {}
 
     if visual_entries:
-        extracted_visual = vision_service.extract_many(
+        extracted_document = vision_service.extract_document(
             [path for _, path in visual_entries],
             upload_context=upload_context,
         )
+        extracted_visual = extracted_document.get("lines", [])
+        merged_context = dict(extracted_document.get("document_context") or {})
         visual_index_map = {
             visual_position: original_index
             for visual_position, (original_index, _) in enumerate(visual_entries, start=1)
@@ -94,7 +97,7 @@ def stage_a_extract(
                     unresolved_tokens=list(row.get("unresolved_tokens", []) or []),
                 )
             )
-    return lines
+    return lines, merged_context
 
 
 def stage_b_interpret(

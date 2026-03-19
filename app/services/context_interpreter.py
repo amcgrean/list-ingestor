@@ -59,6 +59,8 @@ class ContextInterpreter:
             )
             parsed = _extract_json(response.output_text)
             lines = parsed.get("contextualized_lines", parsed if isinstance(parsed, list) else [])
+            if not self._looks_like_valid_model_output(lines, raw_lookup):
+                raise ValueError("Stage B returned invalid or incomplete line identifiers")
             return [self._normalize_context_line(line, raw_lookup=raw_lookup) for line in lines]
         except Exception:
             logger.exception("Stage B interpretation failed; using heuristic interpretation")
@@ -118,6 +120,23 @@ class ContextInterpreter:
             review_reason=str(line.get("review_reason", "")),
             confidence=float(line.get("confidence", 0.0) or 0.0),
         )
+
+    def _looks_like_valid_model_output(
+        self,
+        lines: list[Any],
+        raw_lookup: dict[str, RawExtractedLine],
+    ) -> bool:
+        if not isinstance(lines, list):
+            return False
+        seen_line_ids: set[str] = set()
+        for line in lines:
+            if not isinstance(line, dict):
+                return False
+            line_id = str(line.get("line_id", "")).strip()
+            if not line_id or line_id not in raw_lookup or line_id in seen_line_ids:
+                return False
+            seen_line_ids.add(line_id)
+        return True
 
 
 def _extract_json(text: str) -> Any:

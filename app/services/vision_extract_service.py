@@ -9,6 +9,7 @@ from typing import Any
 
 import pandas as pd
 from openai import OpenAI
+from app.services.upload_context import normalize_document_context
 
 logger = logging.getLogger(__name__)
 
@@ -27,11 +28,14 @@ class VisionExtractService:
         self.model = model
 
     def extract(self, file_path: Path, upload_context: str = "") -> list[dict[str, Any]]:
-        return self.extract_many([file_path], upload_context=upload_context)
+        return self.extract_document([file_path], upload_context=upload_context)["lines"]
 
     def extract_many(self, file_paths: list[Path], upload_context: str = "") -> list[dict[str, Any]]:
+        return self.extract_document(file_paths, upload_context=upload_context)["lines"]
+
+    def extract_document(self, file_paths: list[Path], upload_context: str = "") -> dict[str, Any]:
         if not file_paths:
-            return []
+            return {"document_context": _empty_document_context(), "lines": []}
 
         if all(path.suffix.lower() == ".csv" for path in file_paths):
             combined: list[dict[str, Any]] = []
@@ -40,23 +44,53 @@ class VisionExtractService:
                     normalized = self._normalize_line(len(combined) + 1, row, file_index=file_index)
                     if normalized["raw_text"]:
                         combined.append(normalized)
-            return combined
+            return {"document_context": _empty_document_context(), "lines": combined}
 
         if not self.api_key:
             raise RuntimeError("OPENAI_API_KEY is not configured for image/pdf parsing.")
 
         client = OpenAI(api_key=self.api_key)
-        content = self._build_multi_content(file_paths)
-        prompt = self._build_stage_a_prompt(file_count=len(file_paths), upload_context=upload_context)
         try:
-            response = client.responses.create(
-                model=self.model,
-                input=[{"role": "user", "content": [{"type": "input_text", "text": prompt}, *content]}],
+            parsed = self._extract_document_payload(
+                client,
+                file_paths,
+                upload_context=upload_context,
             )
-            parsed = _extract_json(response.output_text)
-            lines = parsed.get("lines", parsed if isinstance(parsed, list) else [])
-            normalized = [self._normalize_line(idx, line) for idx, line in enumerate(lines, start=1)]
-            return [line for line in normalized if line["raw_text"]]
+            document_context = normalize_document_context(parsed.get("document_context"))
+            raw_lines = parsed.get("lines", [])
+
+            if len(file_paths) > 1 and not self._lines_have_valid_file_indexes(raw_lines, len(file_paths)):
+                logger.warning(
+                    "Stage A returned invalid file indexes for multi-file batch; retrying per file"
+                )
+                fallback_lines: list[dict[str, Any]] = []
+                fallback_contexts: list[dict[str, Any]] = []
+                for file_index, path in enumerate(file_paths, start=1):
+                    single_parsed = self._extract_document_payload(
+                        client,
+                        [path],
+                        upload_context=upload_context,
+                    )
+                    fallback_contexts.append(single_parsed.get("document_context") or {})
+                    single_lines = single_parsed.get("lines", [])
+                    single_normalized = [
+                        self._normalize_line(idx, line, file_index=file_index)
+                        for idx, line in enumerate(single_lines, start=1)
+                    ]
+                    fallback_lines.extend(
+                        line for line in single_normalized if line["raw_text"]
+                    )
+                if not any(document_context.values()):
+                    document_context = _merge_document_contexts(fallback_contexts)
+                normalized = fallback_lines
+            else:
+                normalized = [
+                    self._normalize_line(idx, line)
+                    for idx, line in enumerate(raw_lines, start=1)
+                ]
+                normalized = [line for line in normalized if line["raw_text"]]
+
+            return {"document_context": document_context, "lines": normalized}
         except Exception as exc:
             logger.exception("Stage A extraction failed")
             raise RuntimeError(f"Stage A extraction failed: {exc}") from exc
@@ -161,12 +195,14 @@ class VisionExtractService:
             f"{_WORKFLOW_CONTEXT} "
             f"You are extracting raw lines from {'multiple related uploads' if file_count > 1 else 'a single uploaded list'}. "
             "Read the material list exactly as written. "
-            "Return strict JSON only as an object with key lines. "
+            "Return strict JSON only as an object with keys document_context and lines. "
+            'document_context must have keys summary, customer_name, project_name, global_material_context, job_notes, warnings. '
             "Preserve order, hierarchy, and note lines. "
             "Identify probable section headers, child items, accessories, carry-down notes, and annotations. "
             "Extract quantities and dimensions but do not over-infer missing details. "
             "When a row inherits brand, color, material, or product-family context from a heading or general note, "
             "keep the raw row text intact and capture that relationship through section_header and unresolved_tokens rather than silently rewriting the row. "
+            f"When more than one file is provided, every line must include file_index as an integer from 1 to {file_count}. "
             "Each line must include: file_index, line_id, raw_text, section_header, section_type, quantity_raw, quantity, "
             "dimensions_raw, length, width, height, unit, indentation_level, bullet_style, source_page, source_order, "
             "confidence, unresolved_tokens."
@@ -175,6 +211,44 @@ class VisionExtractService:
         if upload_context:
             prompt += f" User-provided upload context: {upload_context}."
         return prompt
+
+    def _extract_document_payload(
+        self,
+        client: OpenAI,
+        file_paths: list[Path],
+        upload_context: str = "",
+    ) -> dict[str, Any]:
+        content = self._build_multi_content(file_paths)
+        prompt = self._build_stage_a_prompt(
+            file_count=len(file_paths),
+            upload_context=upload_context,
+        )
+        response = client.responses.create(
+            model=self.model,
+            input=[{"role": "user", "content": [{"type": "input_text", "text": prompt}, *content]}],
+        )
+        parsed = _extract_json(response.output_text)
+        if isinstance(parsed, list):
+            parsed = {"document_context": _empty_document_context(), "lines": parsed}
+        elif not isinstance(parsed, dict):
+            parsed = {"document_context": _empty_document_context(), "lines": []}
+        return {
+            "document_context": normalize_document_context(parsed.get("document_context")),
+            "lines": parsed.get("lines", []),
+        }
+
+    def _lines_have_valid_file_indexes(self, lines: list[dict[str, Any]], file_count: int) -> bool:
+        if file_count <= 1:
+            return True
+        if not lines:
+            return True
+        for line in lines:
+            file_index = line.get("file_index")
+            if not isinstance(file_index, int):
+                return False
+            if file_index < 1 or file_index > file_count:
+                return False
+        return True
 
     def _build_legacy_prompt(self, upload_context: str = "") -> str:
         prompt = (
@@ -222,3 +296,24 @@ def _extract_json(text: str) -> Any:
         if not match:
             raise
         return json.loads(match.group(1))
+
+
+def _empty_document_context() -> dict[str, Any]:
+    return normalize_document_context({})
+
+
+def _merge_document_contexts(contexts: list[dict[str, Any]]) -> dict[str, Any]:
+    merged = _empty_document_context()
+    for context in contexts:
+        current = normalize_document_context(context)
+        if current["summary"] and not merged["summary"]:
+            merged["summary"] = current["summary"]
+        if current["customer_name"] and not merged["customer_name"]:
+            merged["customer_name"] = current["customer_name"]
+        if current["project_name"] and not merged["project_name"]:
+            merged["project_name"] = current["project_name"]
+        for key in ("global_material_context", "job_notes", "warnings"):
+            for value in current[key]:
+                if value not in merged[key]:
+                    merged[key].append(value)
+    return merged

@@ -451,7 +451,7 @@ def upload():
 
         if use_context_pipeline:
             try:
-                _, _, stage_c_lines = parse_uploads(
+                _, _, stage_c_lines, stage_document_context = parse_uploads(
                     upload_paths,
                     api_key=api_key,
                     session_id=session.id,
@@ -479,6 +479,8 @@ def upload():
                     for line in stage_c_lines
                 ]
                 parse_stage_label = "context_stage_c"
+                if stage_document_context:
+                    document_contexts.append(stage_document_context)
             except Exception:
                 if not current_app.config.get("CONTEXT_PIPELINE_FALLBACK_TO_LEGACY", True):
                     raise
@@ -511,7 +513,7 @@ def upload():
                 )
                 parsed_items.extend(vision_payload["items"])
                 document_contexts.append(vision_payload["document_context"])
-        elif api_key:
+        elif api_key and not document_contexts:
             visual_uploads = [
                 file_path
                 for _, file_path in saved_uploads
