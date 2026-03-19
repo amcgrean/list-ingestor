@@ -217,11 +217,13 @@ class ParsePipelineTests(unittest.TestCase):
     def test_context_interpreter_flags_handwritten_uncertainty(self):
         interpreter = ContextInterpreter(api_key="", model="gpt-4o")
         contextualized = interpreter.interpret(
-            [RawExtractedLine(line_id="L1", raw_text="master entrance 3/0 (R) 4/9 swng surfce", quantity=1)]
+            [RawExtractedLine(line_id="L1", raw_text="master entrance 3/0 (R) 4/9 swng surfce RHS?", quantity=1)]
         )
 
         self.assertIn("ocr_spelling_uncertain", contextualized[0].ambiguity_flags)
         self.assertIn("single_letter_annotation", contextualized[0].ambiguity_flags)
+        self.assertIn("side_annotation", contextualized[0].ambiguity_flags)
+        self.assertIn("uncertain_marking", contextualized[0].ambiguity_flags)
         self.assertIn("swinging", contextualized[0].normalized_description)
 
     def test_vision_extract_service_heic_uses_jpeg_payload(self):
@@ -245,6 +247,28 @@ class ParsePipelineTests(unittest.TestCase):
             payload = service._build_content(file_path)
 
         self.assertIn("data:image/jpeg;base64,", payload["image_url"])
+
+    def test_context_interpreter_accepts_boolean_ambiguity_flags(self):
+        class FakeResponses:
+            def create(self, **kwargs):
+                class Response:
+                    output_text = (
+                        '{"contextualized_lines":['
+                        '{"line_id":"L1","raw_text":"Bar main level 2/8","normalized_description":"Bar Bar main level 2/8","ambiguity_flags":true}'
+                        ']}'
+                    )
+                return Response()
+
+        class FakeClient:
+            def __init__(self, api_key):
+                self.responses = FakeResponses()
+
+        interpreter = ContextInterpreter(api_key="test", model="gpt-4o")
+        with patch("app.services.context_interpreter.OpenAI", FakeClient):
+            contextualized = interpreter.interpret([RawExtractedLine(line_id="L1", raw_text="Bar main level 2/8", quantity=1)])
+
+        self.assertIn("model_flagged_uncertain", contextualized[0].ambiguity_flags)
+        self.assertEqual(contextualized[0].normalized_description, "Bar main level 2/8")
 
     def test_vision_extract_service_retries_per_file_when_batch_file_index_missing(self):
         captured_inputs = []

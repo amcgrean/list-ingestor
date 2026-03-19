@@ -104,7 +104,7 @@ class ContextInterpreter:
         raw_text = str(line.get("raw_text") or (raw.raw_text if raw else ""))
         normalized_description = _normalize_handwritten_text(str(line.get("normalized_description", "")).strip())
         combined_ambiguity = _merge_ambiguity_flags(
-            list(line.get("ambiguity_flags", []) or []),
+            _coerce_flag_list(line.get("ambiguity_flags", [])),
             _derive_ambiguity_flags(raw_text, normalized_description),
         )
         review_reason = str(line.get("review_reason", "")).strip() or "; ".join(combined_ambiguity)
@@ -180,6 +180,7 @@ def _normalize_handwritten_text(text: str) -> str:
         return ""
     for pattern, replacement in _SHORTHAND_REPLACEMENTS:
         normalized = re.sub(pattern, replacement, normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"\b(\w+)\s+\1\b", r"\1", normalized, count=1, flags=re.IGNORECASE)
     return normalized
 
 
@@ -195,6 +196,8 @@ def _derive_ambiguity_flags(raw_text: str, normalized_description: str) -> list[
         (r"\b(?:lye|surfce|hanle|swng)\b", "ocr_spelling_uncertain"),
         (r"\b\d+x\d+x\d+/\d+\b|\b\d+-\d+\b", "dimension_parse_uncertain"),
         (r"\([A-Za-z]\)", "single_letter_annotation"),
+        (r"\b(?:rhs|lhs|rh|lh)\b", "side_annotation"),
+        (r"\?", "uncertain_marking"),
     )
     for pattern, flag in patterns:
         if re.search(pattern, source, flags=re.IGNORECASE):
@@ -209,3 +212,15 @@ def _merge_ambiguity_flags(*flag_lists: list[str]) -> list[str]:
             if flag and flag not in merged:
                 merged.append(flag)
     return merged
+
+
+def _coerce_flag_list(value: Any) -> list[str]:
+    if value is True:
+        return ["model_flagged_uncertain"]
+    if not value:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        return [str(item) for item in value if str(item).strip()]
+    return [str(value)]
