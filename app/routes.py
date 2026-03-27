@@ -73,40 +73,99 @@ def index():
 
 @main.route("/upload", methods=["POST"])
 def upload():
-    if "file" not in request.files:
+    # ── Collect uploaded files (support multi-image) ──
+    files = request.files.getlist("file")
+    if not files or all(not f.filename for f in files):
         flash("No file selected.", "error")
         return redirect(url_for("main.index"))
 
-    file = request.files["file"]
-    if not file.filename:
-        flash("No file selected.", "error")
+    saved_paths: list[Path] = []
+    first_filename = ""
+    first_ext = ""
+    for file in files:
+        if not file.filename:
+            continue
+        if not allowed_file(file.filename):
+            flash(f"Unsupported file type: {file.filename}. Please upload JPG, PNG, or PDF.", "error")
+            return redirect(url_for("main.index"))
+        if not first_filename:
+            first_filename = secure_filename(file.filename)
+            first_ext = Path(first_filename).suffix.lstrip(".").lower()
+        try:
+            saved_paths.append(save_upload(file))
+        except Exception as exc:
+            logger.exception("Failed to save uploaded file")
+            flash(f"Could not save the uploaded file: {exc}", "error")
+            return redirect(url_for("main.index"))
+
+    if not saved_paths:
+        flash("No valid files uploaded.", "error")
         return redirect(url_for("main.index"))
 
-    if not allowed_file(file.filename):
-        flash("Unsupported file type. Please upload JPG, PNG, or PDF.", "error")
+    # ── Determine AI provider ──
+    provider = request.form.get("ai_provider", "").strip().lower()
+    if provider not in ("claude", "openai"):
+        provider = current_app.config.get("DEFAULT_AI_PROVIDER", "claude")
+
+    if provider == "openai":
+        api_key = current_app.config.get("OPENAI_API_KEY", "")
+        vision_model = current_app.config.get("OPENAI_MODEL", "gpt-4o")
+    else:
+        api_key = current_app.config.get("ANTHROPIC_API_KEY", "")
+        vision_model = current_app.config.get("CLAUDE_MODEL", "claude-sonnet-4-6")
+
+    if not api_key:
+        for p in saved_paths:
+            try:
+                os.unlink(p)
+            except OSError:
+                pass
+        flash(f"AI parsing is not configured. Set the API key for {provider}.", "error")
         return redirect(url_for("main.index"))
 
-    # Save uploaded file
-    try:
-        file_path = save_upload(file)
-    except Exception as exc:
-        logger.exception("Failed to save uploaded file")
-        flash(f"Could not save the uploaded file: {exc}", "error")
-        return redirect(url_for("main.index"))
-    ext = file_path.suffix.lstrip(".").lower()
+    # ── Create session ──
+    display_name = first_filename
+    if len(saved_paths) > 1:
+        display_name = f"{first_filename} (+{len(saved_paths)-1} more)"
 
     session = ProcessingSession(
-        filename=secure_filename(file.filename),
-        file_type=ext,
+        filename=display_name,
+        file_type=first_ext,
         status="pending",
     )
     db.session.add(session)
     db.session.commit()
 
-    # --- Step 1: OCR ---
+    # ── Step 1: OCR (Vision preferred, Tesseract fallback) ──
     try:
-        raw_text = ocr_service.extract_text(file_path)
+        if len(saved_paths) == 1:
+            raw_text = ocr_service.extract_text(
+                saved_paths[0],
+                vision_provider=provider,
+                api_key=api_key,
+                model=vision_model,
+            )
+            ocr_method = "vision" if api_key else "tesseract"
+        else:
+            # Multi-image: concatenate all pages via vision
+            all_texts = []
+            for i, fpath in enumerate(saved_paths):
+                page_text = ocr_service.extract_text(
+                    fpath,
+                    vision_provider=provider,
+                    api_key=api_key,
+                    model=vision_model,
+                )
+                if page_text.strip():
+                    if len(saved_paths) > 1:
+                        all_texts.append(f"--- Page {i+1} ---\n{page_text}")
+                    else:
+                        all_texts.append(page_text)
+            raw_text = "\n\n".join(all_texts)
+            ocr_method = "vision"
+
         session.raw_ocr_text = raw_text
+        session.ocr_method = ocr_method
         session.status = "ocr_complete"
         db.session.commit()
     except Exception as exc:
@@ -117,11 +176,11 @@ def upload():
         flash(f"Could not read the file: {exc}", "error")
         return redirect(url_for("main.index"))
     finally:
-        # Clean up uploaded file after reading
-        try:
-            os.unlink(file_path)
-        except OSError:
-            pass
+        for p in saved_paths:
+            try:
+                os.unlink(p)
+            except OSError:
+                pass
 
     if not raw_text.strip():
         session.status = "error"
@@ -130,57 +189,25 @@ def upload():
         flash("The file appears blank or unreadable. Try a clearer image.", "error")
         return redirect(url_for("main.index"))
 
-    # --- Step 2: AI parse ---
-    provider = request.form.get("ai_provider", "").strip().lower()
-    if provider not in ("claude", "openai"):
-        provider = current_app.config.get("DEFAULT_AI_PROVIDER", "claude")
-
-    if provider == "openai":
-        api_key = current_app.config.get("OPENAI_API_KEY", "")
-        if not api_key:
-            session.status = "error"
-            session.error_message = "OPENAI_API_KEY is not configured."
-            db.session.commit()
-            flash("ChatGPT parsing is not configured. Set OPENAI_API_KEY.", "error")
-            return redirect(url_for("main.index"))
-        try:
+    # ── Step 2: AI parse (now returns rich structured items) ──
+    try:
+        if provider == "openai":
             parsed_items = chatgpt_parser.parse_material_list(
-                raw_text,
-                api_key=api_key,
-                model=current_app.config["OPENAI_MODEL"],
+                raw_text, api_key=api_key, model=current_app.config["OPENAI_MODEL"],
             )
-            session.status = "parsed"
-            db.session.commit()
-        except Exception as exc:
-            logger.exception("ChatGPT parsing failed for session %d", session.id)
-            session.status = "error"
-            session.error_message = f"ChatGPT parsing failed: {exc}"
-            db.session.commit()
-            flash(f"ChatGPT parsing failed: {exc}", "error")
-            return redirect(url_for("main.index"))
-    else:
-        api_key = current_app.config.get("ANTHROPIC_API_KEY", "")
-        if not api_key:
-            session.status = "error"
-            session.error_message = "ANTHROPIC_API_KEY is not configured."
-            db.session.commit()
-            flash("AI parsing is not configured. Set ANTHROPIC_API_KEY.", "error")
-            return redirect(url_for("main.index"))
-        try:
+        else:
             parsed_items = ai_parser.parse_material_list(
-                raw_text,
-                api_key=api_key,
-                model=current_app.config["CLAUDE_MODEL"],
+                raw_text, api_key=api_key, model=current_app.config["CLAUDE_MODEL"],
             )
-            session.status = "parsed"
-            db.session.commit()
-        except Exception as exc:
-            logger.exception("Claude parsing failed for session %d", session.id)
-            session.status = "error"
-            session.error_message = f"AI parsing failed: {exc}"
-            db.session.commit()
-            flash(f"AI parsing failed: {exc}", "error")
-            return redirect(url_for("main.index"))
+        session.status = "parsed"
+        db.session.commit()
+    except Exception as exc:
+        logger.exception("AI parsing failed for session %d", session.id)
+        session.status = "error"
+        session.error_message = f"AI parsing failed: {exc}"
+        db.session.commit()
+        flash(f"AI parsing failed: {exc}", "error")
+        return redirect(url_for("main.index"))
 
     if not parsed_items:
         session.status = "error"
@@ -189,14 +216,13 @@ def upload():
         flash("No items could be extracted from the material list.", "warning")
         return redirect(url_for("main.index"))
 
-    # --- Step 3: Item matching ---
+    # ── Step 3: Item matching (now uses structured metadata) ──
     erp_items = ERPItem.query.all()
-    descriptions = [item["description"] for item in parsed_items]
 
     if erp_items:
         try:
             match_results = item_matcher.match_items_batch(
-                descriptions,
+                parsed_items,
                 erp_items,
                 model_name=current_app.config["EMBEDDING_MODEL"],
                 fuzzy_weight=current_app.config["FUZZY_WEIGHT"],
@@ -208,11 +234,25 @@ def upload():
     else:
         match_results = [item_matcher._no_match() for _ in parsed_items]
 
+    # ── Step 4: Store extracted items with rich metadata ──
     for parsed, match in zip(parsed_items, match_results):
         extracted = ExtractedItem(
             session_id=session.id,
             quantity=parsed["quantity"],
             raw_description=parsed["description"],
+            # Structured fields
+            brand=parsed.get("brand"),
+            color=parsed.get("color"),
+            parsed_size=parsed.get("size"),
+            parsed_length=parsed.get("length"),
+            grade=parsed.get("grade"),
+            category=parsed.get("category"),
+            # Flags
+            is_crossed_out=parsed.get("is_crossed_out", False),
+            is_tbd=parsed.get("is_tbd", False),
+            is_approximate=parsed.get("is_approximate", False),
+            color_tbd=parsed.get("color_tbd", False),
+            # Match results
             matched_item_code=match["matched_item_code"],
             matched_description=match["matched_description"],
             confidence_score=match["confidence_score"],
@@ -316,11 +356,21 @@ def export(session_id, fmt):
             continue
         code = item.effective_item_code()
         erp = ERPItem.query.filter_by(item_code=code).first() if code else None
-        rows.append({
+        row = {
             "quantity": item.effective_quantity(),
             "item_code": code or "",
             "description": erp.description if erp else item.raw_description,
-        })
+        }
+        # Include flags in export for downstream processing
+        if item.is_tbd:
+            row["notes"] = "TBD / pricing only"
+        elif item.is_approximate:
+            row["notes"] = "approximate quantity"
+        elif item.color_tbd:
+            row["notes"] = "color TBD"
+        else:
+            row["notes"] = ""
+        rows.append(row)
 
     if fmt == "json":
         return Response(
@@ -329,7 +379,7 @@ def export(session_id, fmt):
             headers={"Content-Disposition": f'attachment; filename="order_{session_id}.json"'},
         )
 
-    df = pd.DataFrame(rows, columns=["quantity", "item_code", "description"])
+    df = pd.DataFrame(rows, columns=["quantity", "item_code", "description", "notes"])
 
     if fmt == "csv":
         csv_data = df.to_csv(index=False)
@@ -394,7 +444,6 @@ def catalog_upload():
         flash(f"CSV is missing required columns: {', '.join(missing)}", "error")
         return redirect(url_for("main.catalog"))
 
-    # Normalise column names to lowercase
     df.columns = df.columns.str.lower()
 
     replace_all = request.form.get("replace_all") == "1"
@@ -419,9 +468,10 @@ def catalog_upload():
             existing.size = str(row.get("size", "")).strip()
             existing.length = str(row.get("length", "")).strip()
             existing.brand = str(row.get("brand", "")).strip()
+            existing.color = str(row.get("color", "")).strip()
             existing.normalized_name = str(row.get("normalized_name", "")).strip()
             existing.unit_of_measure = str(row.get("unit_of_measure", "EA")).strip()
-            existing.embedding = None  # invalidate stale embedding
+            existing.embedding = None
             updated += 1
         else:
             item = ERPItem(
@@ -433,6 +483,7 @@ def catalog_upload():
                 size=str(row.get("size", "")).strip(),
                 length=str(row.get("length", "")).strip(),
                 brand=str(row.get("brand", "")).strip(),
+                color=str(row.get("color", "")).strip(),
                 normalized_name=str(row.get("normalized_name", "")).strip(),
                 unit_of_measure=str(row.get("unit_of_measure", "EA")).strip(),
             )
@@ -441,7 +492,6 @@ def catalog_upload():
 
     db.session.commit()
 
-    # Rebuild vector index for the current catalog
     all_items = ERPItem.query.all()
     try:
         item_matcher.build_index(all_items, current_app.config["EMBEDDING_MODEL"])
@@ -483,7 +533,6 @@ def session_raw(session_id):
 def health():
     """Lightweight liveness + readiness probe."""
     try:
-        # Verify DB is reachable
         db.session.execute(db.text("SELECT 1"))
         db_ok = True
     except Exception:

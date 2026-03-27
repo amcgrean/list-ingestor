@@ -18,6 +18,7 @@ class ERPItem(db.Model):
     length = db.Column(db.String(20), default="")
     brand = db.Column(db.String(150), default="")
     normalized_name = db.Column(db.String(255), default="")
+    color = db.Column(db.String(100), default="")
     # Serialized embedding vector (list of floats as JSON string)
     _embedding = db.Column("embedding", db.Text, nullable=True)
 
@@ -50,6 +51,8 @@ class ERPItem(db.Model):
             parts.append(f"{self.length}ft")
         if self.brand:
             parts.append(self.brand)
+        if self.color:
+            parts.append(self.color)
         if self.normalized_name:
             parts.append(self.normalized_name)
         return " ".join(parts)
@@ -70,6 +73,7 @@ class ERPItem(db.Model):
             "size": self.size,
             "length": self.length,
             "brand": self.brand,
+            "color": self.color,
             "normalized_name": self.normalized_name,
         }
 
@@ -95,10 +99,15 @@ class ProcessingSession(db.Model):
     status = db.Column(db.String(50), default="pending")
     # pending / ocr_complete / parsed / matched / reviewed / exported
     error_message = db.Column(db.Text, nullable=True)
+    ocr_method = db.Column(db.String(20), default="tesseract")  # tesseract / vision
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     items = db.relationship("ExtractedItem", backref="session", cascade="all, delete-orphan")
+
+    @property
+    def item_count(self):
+        return len(self.items)
 
     def to_dict(self):
         return {
@@ -107,8 +116,9 @@ class ProcessingSession(db.Model):
             "file_type": self.file_type,
             "status": self.status,
             "error_message": self.error_message,
+            "ocr_method": self.ocr_method,
             "created_at": self.created_at.isoformat(),
-            "item_count": len(self.items),
+            "item_count": self.item_count,
         }
 
 
@@ -123,6 +133,20 @@ class ExtractedItem(db.Model):
     quantity = db.Column(db.Float, default=1.0)
     raw_description = db.Column(db.String(500), nullable=False)
 
+    # Structured fields from AI parser
+    brand = db.Column(db.String(150), nullable=True)
+    color = db.Column(db.String(100), nullable=True)
+    parsed_size = db.Column(db.String(50), nullable=True)
+    parsed_length = db.Column(db.Float, nullable=True)
+    grade = db.Column(db.String(50), nullable=True)
+    category = db.Column(db.String(100), nullable=True)
+
+    # Flags from AI parser
+    is_crossed_out = db.Column(db.Boolean, default=False)
+    is_tbd = db.Column(db.Boolean, default=False)
+    is_approximate = db.Column(db.Boolean, default=False)
+    color_tbd = db.Column(db.Boolean, default=False)
+
     # From item matcher
     matched_item_code = db.Column(db.String(100), nullable=True)
     matched_description = db.Column(db.String(500), nullable=True)
@@ -136,6 +160,29 @@ class ExtractedItem(db.Model):
     is_confirmed = db.Column(db.Boolean, default=False)
     is_skipped = db.Column(db.Boolean, default=False)
 
+    @property
+    def erp_description(self):
+        code = self.effective_item_code()
+        if code:
+            erp_item = ERPItem.query.filter_by(item_code=code).first()
+            if erp_item:
+                return erp_item.description
+        return self.matched_description
+
+    @property
+    def flags(self):
+        """Return a list of flag strings for the UI."""
+        flags = []
+        if self.is_crossed_out:
+            flags.append("crossed-out")
+        if self.is_tbd:
+            flags.append("TBD")
+        if self.is_approximate:
+            flags.append("approx-qty")
+        if self.color_tbd:
+            flags.append("color-TBD")
+        return flags
+
     def effective_quantity(self):
         return self.final_quantity if self.final_quantity is not None else self.quantity
 
@@ -143,13 +190,21 @@ class ExtractedItem(db.Model):
         return self.final_item_code or self.matched_item_code
 
     def to_dict(self):
-        erp_item = None
-        if self.effective_item_code():
-            erp_item = ERPItem.query.filter_by(item_code=self.effective_item_code()).first()
         return {
             "id": self.id,
             "quantity": self.effective_quantity(),
             "raw_description": self.raw_description,
+            "brand": self.brand,
+            "color": self.color,
+            "parsed_size": self.parsed_size,
+            "parsed_length": self.parsed_length,
+            "grade": self.grade,
+            "category": self.category,
+            "is_crossed_out": self.is_crossed_out,
+            "is_tbd": self.is_tbd,
+            "is_approximate": self.is_approximate,
+            "color_tbd": self.color_tbd,
+            "flags": self.flags,
             "matched_item_code": self.matched_item_code,
             "matched_description": self.matched_description,
             "confidence_score": round(self.confidence_score, 3),
@@ -159,5 +214,5 @@ class ExtractedItem(db.Model):
             "final_item_code": self.final_item_code,
             "is_confirmed": self.is_confirmed,
             "is_skipped": self.is_skipped,
-            "erp_description": erp_item.description if erp_item else self.matched_description,
+            "erp_description": self.erp_description,
         }

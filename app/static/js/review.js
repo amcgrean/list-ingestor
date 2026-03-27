@@ -1,11 +1,12 @@
 /* Review page — save, autocomplete, checkbox logic */
 (function () {
-  const saveBtn        = document.getElementById("save-btn");
-  const saveStatus     = document.getElementById("save-status");
-  const confirmAllBtn  = document.getElementById("confirm-all-btn");
-  const skipLowBtn     = document.getElementById("skip-unmatched-btn");
-  const toggleRawBtn   = document.getElementById("toggle-raw-btn");
-  const rawText        = document.getElementById("raw-text");
+  const saveBtn           = document.getElementById("save-btn");
+  const saveStatus        = document.getElementById("save-status");
+  const confirmAllBtn     = document.getElementById("confirm-all-btn");
+  const skipLowBtn        = document.getElementById("skip-unmatched-btn");
+  const skipCrossedBtn    = document.getElementById("skip-crossed-out-btn");
+  const toggleRawBtn      = document.getElementById("toggle-raw-btn");
+  const rawText           = document.getElementById("raw-text");
 
   // ----------------------------------------------------------------
   // Raw text toggle
@@ -75,6 +76,18 @@
   if (skipLowBtn) {
     skipLowBtn.addEventListener("click", () => {
       document.querySelectorAll(".item-row.low-confidence").forEach((row) => {
+        const cb = row.querySelector(".skip-cb");
+        if (cb) { cb.checked = true; cb.dispatchEvent(new Event("change")); }
+      });
+    });
+  }
+
+  // ----------------------------------------------------------------
+  // Skip crossed-out items
+  // ----------------------------------------------------------------
+  if (skipCrossedBtn) {
+    skipCrossedBtn.addEventListener("click", () => {
+      document.querySelectorAll('.item-row[data-crossed-out="true"]').forEach((row) => {
         const cb = row.querySelector(".skip-cb");
         if (cb) { cb.checked = true; cb.dispatchEvent(new Event("change")); }
       });

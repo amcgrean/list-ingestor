@@ -454,5 +454,50 @@ body {
 .empty-state { text-align: center; padding: 2rem; color: var(--gray-500); }
 .error-hint { color: var(--warning); font-size: .8rem; cursor: help; }
 
+/* ---- Flag badges ---- */
+.flag-badge {
+  display: inline-block;
+  padding: .15rem .4rem;
+  border-radius: 4px;
+  font-size: .7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  margin: 1px 2px;
+  white-space: nowrap;
+}
+.flag-crossed-out { background: #fee2e2; color: #991b1b; }
+.flag-TBD         { background: #fef3c7; color: #92400e; }
+.flag-approx-qty, .flag-approx { background: #e0e7ff; color: #3730a3; }
+.flag-color-TBD   { background: #fce7f3; color: #9d174d; }
+
+/* ---- Metadata tags under description ---- */
+.meta-line {
+  margin-top: 3px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+.meta-tag {
+  display: inline-block;
+  padding: .1rem .35rem;
+  border-radius: 3px;
+  font-size: .68rem;
+  font-weight: 500;
+}
+.meta-brand    { background: #dbeafe; color: #1e40af; }
+.meta-color    { background: #fce7f3; color: #9d174d; }
+.meta-grade    { background: #d1fae5; color: #065f46; }
+.meta-category { background: #f3e8ff; color: #6b21a8; }
+
+/* Crossed-out row styling */
+.text-strikethrough { text-decoration: line-through; opacity: .6; }
+.row-crossed-out td { background: #fef2f2; }
+.row-tbd td { background: #fffbeb; }
+
+/* OCR method badges */
+.badge-vision    { background: #dbeafe; color: #1e40af; }
+.badge-tesseract { background: var(--gray-100); color: var(--gray-700); }
+
 /* Utilities */
 .hidden { display: none !important; }

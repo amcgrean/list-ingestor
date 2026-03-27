@@ -4,22 +4,22 @@
 {% block content %}
 <div class="page-header">
   <h1>Convert Material List to ERP Order</h1>
-  <p class="subtitle">Upload a photo or PDF of a contractor's material list to extract and match items automatically.</p>
+  <p class="subtitle">Upload photos or PDFs of a contractor's material list to extract and match items automatically. You can upload multiple pages for the same job.</p>
 </div>
 
 <div class="card upload-card">
   <form id="upload-form" action="{{ url_for('main.upload') }}" method="post" enctype="multipart/form-data">
     <div class="drop-zone" id="drop-zone">
       <div class="drop-zone-icon">&#128196;</div>
-      <p class="drop-zone-label">Drag &amp; drop your file here, or <label for="file-input" class="browse-link">browse</label></p>
-      <p class="drop-zone-hint">Supported: JPG, PNG, PDF &mdash; max 32 MB</p>
-      <input id="file-input" type="file" name="file" accept="image/*,.pdf" class="file-input-hidden" required />
+      <p class="drop-zone-label">Drag &amp; drop your files here, or <label for="file-input" class="browse-link">browse</label></p>
+      <p class="drop-zone-hint">Supported: JPG, PNG, PDF &mdash; max 32 MB per file. Select multiple for multi-page jobs.</p>
+      <input id="file-input" type="file" name="file" accept="image/*,.pdf" class="file-input-hidden" required multiple />
       <input id="camera-input" type="file" accept="image/*" capture="environment" class="file-input-hidden" />
     </div>
 
     <div class="mobile-upload-actions">
       <button type="button" class="btn btn-secondary" id="camera-btn">&#128247; Take Photo</button>
-      <button type="button" class="btn btn-secondary" id="gallery-btn">&#128193; Choose File</button>
+      <button type="button" class="btn btn-secondary" id="gallery-btn">&#128193; Choose Files</button>
     </div>
 
     <div id="file-preview" class="file-preview hidden">
@@ -67,6 +67,7 @@
     <thead>
       <tr>
         <th>File</th>
+        <th>OCR</th>
         <th>Status</th>
         <th>Items</th>
         <th>Date</th>
@@ -77,6 +78,7 @@
       {% for s in sessions %}
       <tr>
         <td>{{ s.filename }}</td>
+        <td><span class="badge badge-{{ s.ocr_method or 'tesseract' }}">{{ s.ocr_method or 'tesseract' }}</span></td>
         <td><span class="badge badge-{{ s.status }}">{{ s.status }}</span></td>
         <td>{{ s.item_count }}</td>
         <td>{{ s.created_at.strftime('%b %d, %Y %H:%M') }}</td>

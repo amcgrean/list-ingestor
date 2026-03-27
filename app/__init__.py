@@ -44,9 +44,11 @@ def create_app(config_class=Config):
     app.register_blueprint(main)
 
     with app.app_context():
-        from app.models import ERPItem
+        from app.models import ERPItem, ExtractedItem, ProcessingSession
 
         db.create_all()
         _sync_table_columns(ERPItem)
+        _sync_table_columns(ExtractedItem)
+        _sync_table_columns(ProcessingSession)
 
     return app

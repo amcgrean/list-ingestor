@@ -5,7 +5,8 @@
 <div class="page-header">
   <h1>Review &amp; Edit Matches</h1>
   <p class="subtitle">
-    <strong>{{ session.filename }}</strong> &mdash; {{ items|length }} item(s) extracted.
+    <strong>{{ session.filename }}</strong> &mdash; {{ items|length }} item(s) extracted
+    via <span class="badge badge-{{ session.ocr_method or 'tesseract' }}">{{ session.ocr_method or 'tesseract' }}</span>.
     Items below {{ (threshold * 100)|int }}% confidence are highlighted.
   </p>
 </div>
@@ -22,6 +23,7 @@
     <div class="toolbar-left">
       <button class="btn btn-sm btn-secondary" id="confirm-all-btn">Confirm All</button>
       <button class="btn btn-sm btn-outline" id="skip-unmatched-btn">Skip Low Confidence</button>
+      <button class="btn btn-sm btn-outline" id="skip-crossed-out-btn">Skip Crossed-Out</button>
     </div>
     <div class="toolbar-right">
       <span id="save-status" class="save-status"></span>
@@ -37,6 +39,7 @@
           <th style="width:60px">Skip</th>
           <th style="width:90px">Qty</th>
           <th>Extracted Description</th>
+          <th style="width:140px">Flags</th>
           <th>Matched ERP Item</th>
           <th style="width:130px">Item Code</th>
           <th style="width:110px">Confidence</th>
@@ -46,15 +49,16 @@
       <tbody>
         {% for item in items %}
         {% set low_conf = item.confidence_score < threshold %}
-        <tr class="item-row {% if low_conf %}low-confidence{% endif %} {% if item.is_skipped %}row-skipped{% endif %}"
+        <tr class="item-row {% if low_conf %}low-confidence{% endif %} {% if item.is_skipped %}row-skipped{% endif %} {% if item.is_crossed_out %}row-crossed-out{% endif %} {% if item.is_tbd %}row-tbd{% endif %}"
             data-id="{{ item.id }}"
             data-confirmed="{{ 'true' if item.is_confirmed else 'false' }}"
-            data-skipped="{{ 'true' if item.is_skipped else 'false' }}">
+            data-skipped="{{ 'true' if item.is_skipped else 'false' }}"
+            data-crossed-out="{{ 'true' if item.is_crossed_out else 'false' }}">
 
           <!-- Skip checkbox -->
           <td class="col-skip">
             <label class="checkbox-wrap">
-              <input type="checkbox" class="skip-cb" {% if item.is_skipped %}checked{% endif %} />
+              <input type="checkbox" class="skip-cb" {% if item.is_skipped or item.is_crossed_out %}checked{% endif %} />
               <span class="checkmark"></span>
             </label>
           </td>
@@ -68,7 +72,25 @@
 
           <!-- Extracted description -->
           <td class="col-raw">
-            <span class="raw-desc">{{ item.raw_description }}</span>
+            <span class="raw-desc {% if item.is_crossed_out %}text-strikethrough{% endif %}">{{ item.raw_description }}</span>
+            {% if item.brand or item.category %}
+            <div class="meta-line">
+              {% if item.brand %}<span class="meta-tag meta-brand">{{ item.brand }}</span>{% endif %}
+              {% if item.color %}<span class="meta-tag meta-color">{{ item.color }}</span>{% endif %}
+              {% if item.grade %}<span class="meta-tag meta-grade">{{ item.grade }}</span>{% endif %}
+              {% if item.category %}<span class="meta-tag meta-category">{{ item.category }}</span>{% endif %}
+            </div>
+            {% endif %}
+          </td>
+
+          <!-- Flags -->
+          <td class="col-flags">
+            {% for flag in item.flags %}
+              <span class="flag-badge flag-{{ flag }}">{{ flag }}</span>
+            {% endfor %}
+            {% if item.is_approximate %}
+              <span class="flag-badge flag-approx" title="Quantity is approximate">~qty</span>
+            {% endif %}
           </td>
 
           <!-- Matched item description + autocomplete -->
