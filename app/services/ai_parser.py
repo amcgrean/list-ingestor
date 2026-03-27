@@ -22,11 +22,20 @@ return a clean, structured JSON array of line items.
 
 Rules:
 - Each line item must have "quantity" (number, default to 1 if missing) and "description" (string).
-- Normalize spelling errors (e.g. "deckin" → "decking").
+- Normalize spelling errors (e.g. "deckin" → "decking", "surfce" → "surface").
 - Expand construction shorthand (e.g. "2x10x16" → "2x10 16ft", "lf" → "linear feet").
+- Common lumber abbreviations: PT=pressure treated, SPF=spruce pine fir, SYP=southern yellow pine,
+  DF=douglas fir, WRC=western red cedar, KD=kiln dried, S4S=surfaced four sides, LVL=laminated veneer lumber,
+  OSB=oriented strand board, MCA=micronized copper azole, HDG=hot dip galvanized, SS=stainless steel,
+  TJI=trus joist i-joist, RH=right hand, LH=left hand.
 - Keep measurements in the description (size, length, grade, species, finish, color).
+- Preserve brand names exactly (Trex, TimberTech, Westbury, Simpson, GRK, Moisture Shield, etc.).
+- Preserve color names exactly (sand, saddle, rope swing, bronze, black, white, etc.).
+- Door/window handing notation (XO, OX, OXO) should be kept as-is in the description.
+- Crossed-out or struck-through items: still include them but add "(crossed out)" at the end.
+- Pricing-only lines (e.g. "$4.50/lf" with no product): skip these — they are not material items.
+- If a quantity is unclear, approximate, or marked with "?", use your best estimate and append "(approx)" to description.
 - Do NOT infer or add items that are not present in the source text.
-- If a line has no clear quantity, use 1.
 - Merge duplicate items if they are clearly the same material listed twice.
 - Return ONLY valid JSON — no markdown fences, no commentary.
 

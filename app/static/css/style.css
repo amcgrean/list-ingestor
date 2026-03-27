@@ -489,6 +489,17 @@ body {
 .feedback-actions { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; }
 .col-comment .item-comment { width: 100%; min-width: 170px; }
 
+/* Flag badges for ambiguity indicators */
+.flag-badges { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 3px; }
+.flag-badge {
+  display: inline-block; font-size: 0.7em; padding: 1px 6px; border-radius: 3px;
+  font-weight: 500; line-height: 1.4; white-space: nowrap;
+  background: var(--gray-200); color: var(--gray-700);
+}
+.flag-crossed { background: #fecaca; color: #991b1b; }
+.flag-uncertain { background: #fef3c7; color: #92400e; }
+.flag-pricing { background: #dbeafe; color: #1e40af; }
+
 @media (max-width: 840px) {
   .nav-inner {
     height: auto;

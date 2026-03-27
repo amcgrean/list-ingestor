@@ -24,10 +24,40 @@ import logging as _logging
 _log = _logging.getLogger(__name__)
 
 
+_ABBREVIATIONS = {
+    r"\bpt\b": "pressure treated",
+    r"\brh\b": "right hand",
+    r"\blh\b": "left hand",
+    r"\blvl\b": "laminated veneer lumber",
+    r"\bosb\b": "oriented strand board",
+    r"\bspf\b": "spruce pine fir",
+    r"\bsyp\b": "southern yellow pine",
+    r"\bdf\b": "douglas fir",
+    r"\bkd\b": "kiln dried",
+    r"\bs4s\b": "surfaced four sides",
+    r"\bwrc\b": "western red cedar",
+    r"\bmca\b": "micronized copper azole",
+    r"\blf\b": "linear feet",
+    r"\bsf\b": "square feet",
+    r"\bbf\b": "board feet",
+    r"\btji\b": "trus joist i-joist",
+    r"\bgrk\b": "GRK fastener",
+    r"\blus\b": "Simpson LUS joist hanger",
+    r"\bpvc\b": "PVC",
+    r"\bhdg\b": "hot dip galvanized",
+    r"\bss\b": "stainless steel",
+    r"\bea\b": "each",
+}
+
+# Pre-compile abbreviation patterns for performance
+_ABBREV_COMPILED = [(re.compile(pat, re.IGNORECASE), repl) for pat, repl in _ABBREVIATIONS.items()]
+
+
 def normalise_description(text: str) -> str:
     text = (text or "").lower().strip()
     text = re.sub(r"(\d+x\d+)x(\d{1,2})", r"\1 \2ft", text)
-    text = re.sub(r"\bpt\b", "pressure treated", text)
+    for pattern, replacement in _ABBREV_COMPILED:
+        text = pattern.sub(replacement, text)
     return re.sub(r"\s+", " ", text)
 
 
@@ -206,6 +236,36 @@ def _apply_feedback_rerank(candidates: list[dict], feedback_counts: dict[str, in
     return reranked
 
 
+def _brand_match_bonus(parsed_brand: str | None, catalog_item: ERPItem) -> float:
+    """Score bonus/penalty when the parsed brand matches or conflicts with catalog."""
+    if not parsed_brand:
+        return 0.0
+    pb = parsed_brand.lower().strip()
+    cb = (getattr(catalog_item, 'brand', '') or "").lower().strip()
+    if not cb:
+        searchable = ((catalog_item.description or "") + " " + (getattr(catalog_item, 'keywords', '') or "")).lower()
+        if pb in searchable:
+            return 0.06
+        return 0.0
+    if pb == cb or pb in cb or cb in pb:
+        return 0.10
+    return -0.05
+
+
+def _color_match_bonus(parsed_color: str | None, catalog_item: ERPItem) -> float:
+    """Score bonus/penalty when the parsed color matches or conflicts with catalog."""
+    if not parsed_color:
+        return 0.0
+    pc = parsed_color.lower().strip()
+    cc = (getattr(catalog_item, 'color', '') or "").lower().strip()
+    searchable = ((catalog_item.description or "") + " " + (getattr(catalog_item, 'keywords', '') or "")).lower()
+    if cc and (pc == cc or pc in cc or cc in pc):
+        return 0.10
+    if pc in searchable:
+        return 0.06
+    return -0.03
+
+
 def match_item(
     description: str,
     erp_items: list[ERPItem],
@@ -245,6 +305,8 @@ def match_item_candidates(
     vector_weight: float = 0.6,
     k: int = 5,
     cache_key: str = "default",
+    parsed_brand: str | None = None,
+    parsed_color: str | None = None,
 ):
     if not erp_items:
         return []
@@ -283,11 +345,13 @@ def match_item_candidates(
             final_score += 0.08
         if length and item.length and str(item.length) == str(length):
             final_score += 0.08
+        final_score += _brand_match_bonus(parsed_brand, item)
+        final_score += _color_match_bonus(parsed_color, item)
 
         candidates.append({
             "sku": item.sku,
             "description": item.description,
-            "confidence_score": round(min(final_score, 1.0), 4),
+            "confidence_score": round(min(max(final_score, 0.0), 1.0), 4),
             "fuzzy_score": round(f_score, 4),
             "vector_score": round(v_score, 4),
             "size": item.size,
@@ -306,6 +370,8 @@ def match_items_batch(
     fuzzy_weight: float = 0.4,
     vector_weight: float = 0.6,
     cache_key: str = "default",
+    parsed_brands: list[str | None] | None = None,
+    parsed_colors: list[str | None] | None = None,
 ):
     """Match a batch of descriptions against the catalog.
 
@@ -319,6 +385,10 @@ def match_items_batch(
     if not descriptions:
         return []
 
+    # Default brand/color lists to None entries if not provided
+    brands = parsed_brands or [None] * len(descriptions)
+    colors = parsed_colors or [None] * len(descriptions)
+
     by_sku = _catalog_by_sku(erp_items)
 
     # --- Single bulk alias lookup for all descriptions ---
@@ -326,7 +396,8 @@ def match_items_batch(
 
     # Separate alias-resolved items from those that need vector search
     results: dict[int, dict] = {}
-    needs_vector: list[tuple[int, str, str, tuple]] = []  # (idx, description, norm_desc, size_length)
+    # (idx, description, norm_desc, size_length, brand, color)
+    needs_vector: list[tuple[int, str, str, tuple, str | None, str | None]] = []
 
     for i, description in enumerate(descriptions):
         norm_desc = normalise_description(description)
@@ -351,20 +422,20 @@ def match_items_batch(
             }
         else:
             size_length = parse_size_and_length(norm_desc)
-            needs_vector.append((i, description, norm_desc, size_length))
+            needs_vector.append((i, description, norm_desc, size_length, brands[i], colors[i]))
 
     # --- Single bulk feedback query for all remaining descriptions ---
-    norm_descs_needing_feedback = [norm_desc for _, _, norm_desc, _ in needs_vector]
+    norm_descs_needing_feedback = [norm_desc for _, _, norm_desc, _, _, _ in needs_vector]
     all_feedback = _feedback_counts_batch(norm_descs_needing_feedback)
 
     # Batch-encode all remaining queries in one transformer call
     if needs_vector and erp_items:
         idx = _ensure_vector_index(erp_items, model_name, cache_key=cache_key)
         k = 5
-        norm_queries = [norm_desc for _, _, norm_desc, _ in needs_vector]
+        norm_queries = [norm_desc for _, _, norm_desc, _, _, _ in needs_vector]
         batch_hits = idx.search_batch(norm_queries, k=max(k * 2, 10))
 
-        for (orig_idx, description, norm_desc, (size, length)), vector_hits in zip(
+        for (orig_idx, description, norm_desc, (size, length), brand, color), vector_hits in zip(
             needs_vector, batch_hits
         ):
             feedback_counts = all_feedback.get(norm_desc, {})
@@ -382,11 +453,13 @@ def match_items_batch(
                     final_score += 0.08
                 if length and item.length and str(item.length) == str(length):
                     final_score += 0.08
+                final_score += _brand_match_bonus(brand, item)
+                final_score += _color_match_bonus(color, item)
 
                 candidates.append({
                     "sku": item.sku,
                     "description": item.description,
-                    "confidence_score": round(min(final_score, 1.0), 4),
+                    "confidence_score": round(min(max(final_score, 0.0), 1.0), 4),
                     "fuzzy_score": round(f_score, 4),
                     "vector_score": round(v_score, 4),
                     "size": item.size,
@@ -422,7 +495,7 @@ def match_items_batch(
             # Yield CPU briefly between items so the web worker stays responsive
             time.sleep(0)
     else:
-        for orig_idx, *_ in needs_vector:
+        for orig_idx, *_rest in needs_vector:
             results[orig_idx] = _no_match()
 
     return [results[i] for i in range(len(descriptions))]

@@ -61,6 +61,7 @@
     <div class="toolbar-left">
       <button class="btn btn-sm btn-secondary" id="confirm-all-btn">Confirm All</button>
       <button class="btn btn-sm btn-outline" id="skip-unmatched-btn">Skip Low Confidence</button>
+      <button class="btn btn-sm btn-outline" id="skip-crossed-btn">Skip Crossed-Out</button>
     </div>
     <div class="toolbar-right">
       <span id="save-status" class="save-status"></span>
@@ -90,7 +91,8 @@
             data-id="{{ item.id }}"
             data-confirmed="{{ 'true' if item.is_confirmed else 'false' }}"
             data-skipped="{{ 'true' if item.is_skipped else 'false' }}"
-            data-candidates="{{ item.candidates_json or '[]' }}">
+            data-candidates="{{ item.candidates_json or '[]' }}"
+            data-flags="{{ item.parsed_ambiguity_flags|join(',') }}">
 
           <!-- Skip checkbox -->
           <td class="col-skip">
@@ -110,6 +112,13 @@
           <!-- Extracted description -->
           <td class="col-raw">
             <span class="raw-desc">{{ item.raw_description }}</span>
+            {% if item.parsed_ambiguity_flags %}
+            <div class="flag-badges">
+              {% for flag in item.parsed_ambiguity_flags %}
+              <span class="flag-badge {% if flag == 'crossed_out' %}flag-crossed{% elif flag == 'quantity_uncertain' %}flag-uncertain{% elif flag == 'pricing_only' %}flag-pricing{% endif %}">{{ flag|replace('_', ' ') }}</span>
+              {% endfor %}
+            </div>
+            {% endif %}
           </td>
 
           <!-- Matched item description + autocomplete -->

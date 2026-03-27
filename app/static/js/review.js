@@ -4,6 +4,7 @@
   const saveStatus     = document.getElementById("save-status");
   const confirmAllBtn  = document.getElementById("confirm-all-btn");
   const skipLowBtn     = document.getElementById("skip-unmatched-btn");
+  const skipCrossedBtn = document.getElementById("skip-crossed-btn");
   const toggleRawBtn   = document.getElementById("toggle-raw-btn");
   const rawText        = document.getElementById("raw-text");
   const sessionComment = document.getElementById("session-comment");
@@ -103,6 +104,18 @@
       document.querySelectorAll(".item-row.low-confidence").forEach((row) => {
         const cb = row.querySelector(".skip-cb");
         if (cb) { cb.checked = true; cb.dispatchEvent(new Event("change")); }
+      });
+    });
+  }
+
+  if (skipCrossedBtn) {
+    skipCrossedBtn.addEventListener("click", () => {
+      document.querySelectorAll(".item-row").forEach((row) => {
+        const flags = (row.dataset.flags || "").toLowerCase();
+        if (flags.includes("crossed_out")) {
+          const cb = row.querySelector(".skip-cb");
+          if (cb) { cb.checked = true; cb.dispatchEvent(new Event("change")); }
+        }
       });
     });
   }
