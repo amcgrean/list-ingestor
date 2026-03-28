@@ -145,40 +145,40 @@
   <h2 class="section-title">Recent Sessions</h2>
   {% if recent_sessions %}
   <div class="table-scroll">
-  <table class="data-table">
+  <table class="data-table metrics-sessions-table">
     <thead>
       <tr>
-        <th>#</th>
-        <th>File</th>
-        <th>Provider</th>
-        <th>Status</th>
-        <th>OCR (ms)</th>
-        <th>AI (ms)</th>
-        <th>Match (ms)</th>
-        <th>Total (ms)</th>
-        <th>Items</th>
-        <th>Below&nbsp;Thresh</th>
-        <th>Avg&nbsp;Conf</th>
-        <th>Corrections</th>
-        <th>Errors</th>
-        <th>Date</th>
+        <th class="mcol-id">#</th>
+        <th class="mcol-file">File</th>
+        <th class="mcol-provider mcol-hide-sm">Provider</th>
+        <th class="mcol-status">Status</th>
+        <th class="mcol-ocr mcol-hide-sm">OCR (ms)</th>
+        <th class="mcol-ai mcol-hide-sm">AI (ms)</th>
+        <th class="mcol-match mcol-hide-sm">Match (ms)</th>
+        <th class="mcol-total mcol-hide-md">Total (ms)</th>
+        <th class="mcol-items">Items</th>
+        <th class="mcol-below mcol-hide-md">Below&nbsp;Thresh</th>
+        <th class="mcol-conf">Avg&nbsp;Conf</th>
+        <th class="mcol-corrections">Corrections</th>
+        <th class="mcol-errors mcol-hide-md">Errors</th>
+        <th class="mcol-date mcol-hide-sm">Date</th>
       </tr>
     </thead>
     <tbody>
       {% for s in recent_sessions %}
       <tr>
-        <td><a href="{{ url_for('main.review', session_id=s.session_id) }}">{{ s.session_id }}</a></td>
-        <td class="td-filename" title="{{ s.filename }}">{{ s.filename | truncate(28, true) }}</td>
-        <td>{{ s.ai_provider }}</td>
-        <td><span class="badge badge-{{ s.status }}">{{ s.status }}</span></td>
-        <td>{{ s.ocr_duration_ms or "—" }}</td>
-        <td>{{ s.ai_parse_duration_ms or "—" }}</td>
-        <td>{{ s.match_duration_ms or "—" }}</td>
-        <td>{{ s.total_duration_ms or "—" }}</td>
-        <td>{{ s.items_extracted }}</td>
-        <td>{{ s.items_below_threshold }}</td>
-        <td>{{ "%.2f"|format(s.avg_confidence) if s.avg_confidence is not none else "—" }}</td>
-        <td>
+        <td class="mcol-id"><a href="{{ url_for('main.review', session_id=s.session_id) }}">{{ s.session_id }}</a></td>
+        <td class="mcol-file td-filename" title="{{ s.filename }}">{{ s.filename | truncate(28, true) }}</td>
+        <td class="mcol-provider mcol-hide-sm">{{ s.ai_provider }}</td>
+        <td class="mcol-status"><span class="badge badge-{{ s.status }}">{{ s.status }}</span></td>
+        <td class="mcol-ocr mcol-hide-sm">{{ s.ocr_duration_ms or "—" }}</td>
+        <td class="mcol-ai mcol-hide-sm">{{ s.ai_parse_duration_ms or "—" }}</td>
+        <td class="mcol-match mcol-hide-sm">{{ s.match_duration_ms or "—" }}</td>
+        <td class="mcol-total mcol-hide-md">{{ s.total_duration_ms or "—" }}</td>
+        <td class="mcol-items">{{ s.items_extracted }}</td>
+        <td class="mcol-below mcol-hide-md">{{ s.items_below_threshold }}</td>
+        <td class="mcol-conf">{{ "%.2f"|format(s.avg_confidence) if s.avg_confidence is not none else "—" }}</td>
+        <td class="mcol-corrections">
           {% if s.feedback %}
             {% if s.feedback.total %}
               {{ s.feedback.corrected }} / {{ s.feedback.total }}
@@ -186,13 +186,13 @@
             {% else %}—{% endif %}
           {% else %}—{% endif %}
         </td>
-        <td>
+        <td class="mcol-errors mcol-hide-md">
           {% if s.ocr_error %}<span class="badge badge-error" title="OCR error">OCR</span>{% endif %}
           {% if s.ai_parse_error %}<span class="badge badge-error" title="AI parse error">AI</span>{% endif %}
           {% if s.match_error %}<span class="badge badge-error" title="Match error">Match</span>{% endif %}
           {% if not s.ocr_error and not s.ai_parse_error and not s.match_error %}—{% endif %}
         </td>
-        <td class="td-date">{{ s.created_at[:10] }}</td>
+        <td class="mcol-date mcol-hide-sm td-date">{{ s.created_at[:10] }}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -280,5 +280,14 @@
   .td-date { white-space: nowrap; color: #888; font-size: .85rem; }
 
   .badge-error { background: #e74c3c; color: #fff; }
+
+  /* ── Responsive column hiding ── */
+  @media (max-width: 840px) {
+    .mcol-hide-md { display: none; }
+  }
+  @media (max-width: 640px) {
+    .mcol-hide-sm { display: none; }
+    .mcol-file { max-width: 120px; }
+  }
 </style>
 {% endblock %}

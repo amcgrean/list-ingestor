@@ -85,6 +85,90 @@ def validate_raw_columns(df: pd.DataFrame) -> None:
         )
 
 
+# Known composite/decking color names mapped to canonical form.
+# Sources: Trex, TimberTech/AZEK distributor pricelists and spec sheets (through Aug 2025).
+# Extend this list as new brands/colors are encountered in catalog imports.
+# Order matters: more-specific patterns first to avoid partial matches.
+_KNOWN_COLORS: list[tuple[re.Pattern, str]] = [
+    # ── Trex Transcend ──────────────────────────────────────────────────────
+    (re.compile(r"\bcinnamon\s+cove\b", re.I), "Cinnamon Cove"),
+    (re.compile(r"\btiki\s+torch\b", re.I), "Tiki Torch"),
+    (re.compile(r"\bhavana\s+gold\b", re.I), "Havana Gold"),
+    (re.compile(r"\bspiced?\s+rum\b", re.I), "Spiced Rum"),
+    (re.compile(r"\blava\s+rock\b", re.I), "Lava Rock"),
+    (re.compile(r"\bgravel\s+path\b", re.I), "Gravel Path"),
+    (re.compile(r"\bcloudy\s+day\b", re.I), "Cloudy Day"),
+    (re.compile(r"\bisland\s+mist\b", re.I), "Island Mist"),
+    (re.compile(r"\brope\s+swing\b", re.I), "Rope Swing"),
+    (re.compile(r"\brocky\s+harbor\b", re.I), "Rocky Harbor"),
+    (re.compile(r"\bvintage\s+lantern\b", re.I), "Vintage Lantern"),
+    (re.compile(r"\btoasted\s+sand\b", re.I), "Toasted Sand"),
+    (re.compile(r"\bweathered\s+wood\b", re.I), "Weathered Wood"),
+    (re.compile(r"\bmoonlight\s+decking\b", re.I), "Moonlight Decking"),
+    # ── Trex Select ─────────────────────────────────────────────────────────
+    (re.compile(r"\bpebble\s+gr[ae]y\b", re.I), "Pebble Grey"),
+    (re.compile(r"\bsaddle\b", re.I), "Saddle"),
+    # Winchester Grey also appears in TimberTech PRO Reserve — ambiguous
+    (re.compile(r"\bwinchester\s+gr[ae]y\b", re.I), "Winchester Grey"),
+    (re.compile(r"\bwoodland\s+brown\b", re.I), "Woodland Brown"),
+    # ── Trex Enhance ────────────────────────────────────────────────────────
+    (re.compile(r"\bclam\s+shell\b", re.I), "Clam Shell"),
+    (re.compile(r"\bbeach\s+dune\b", re.I), "Beach Dune"),
+    (re.compile(r"\bfoggy\s+wharf\b", re.I), "Foggy Wharf"),
+    (re.compile(r"\bseaside\s+gr[ae]y\b", re.I), "Seaside Grey"),
+    (re.compile(r"\btree\s+house\b", re.I), "Tree House"),
+    (re.compile(r"\bfire\s+pit\b", re.I), "Fire Pit"),
+    (re.compile(r"\btorchlight\b", re.I), "Torchlight"),
+    # ── TimberTech PRO Reserve (capped composite) ────────────────────────────
+    (re.compile(r"\bantique\s+leather\b", re.I), "Antique Leather"),
+    (re.compile(r"\btigerwood\b", re.I), "Tigerwood"),
+    (re.compile(r"\bweathered\s+teak\b", re.I), "Weathered Teak"),
+    (re.compile(r"\btropical\s+walnut\b", re.I), "Tropical Walnut"),
+    (re.compile(r"\bsandy\s+birch\b", re.I), "Sandy Birch"),
+    (re.compile(r"\bstormy\s+night\b", re.I), "Stormy Night"),
+    (re.compile(r"\brushtic\s+elm\b", re.I), "Rustic Elm"),
+    (re.compile(r"\bcanyon\s+dusk\b", re.I), "Canyon Dusk"),
+    (re.compile(r"\bcobalt\s+coast\b", re.I), "Cobalt Coast"),
+    (re.compile(r"\bdark\s+sienna\b", re.I), "Dark Sienna"),
+    # ── TimberTech PRO Legacy ────────────────────────────────────────────────
+    (re.compile(r"\bterrain\s+teak\b", re.I), "Terrain Teak"),
+    (re.compile(r"\brushtic\s+cedar\b", re.I), "Rustic Cedar"),
+    (re.compile(r"\bdriftwood\b", re.I), "Driftwood"),
+    # ── TimberTech Edge ──────────────────────────────────────────────────────
+    (re.compile(r"\bashwood\b", re.I), "Ashwood"),
+    (re.compile(r"\bwhitewood\b", re.I), "Whitewood"),
+    # ── Azek / TimberTech AZEK (PVC) ─────────────────────────────────────────
+    (re.compile(r"\bslate\s+gr[ae]y\b", re.I), "Slate Grey"),
+    (re.compile(r"\bbrownstone\b", re.I), "Brownstone"),
+    (re.compile(r"\bwhite\s+oak\b", re.I), "White Oak"),
+    (re.compile(r"\bcoastline\b", re.I), "Coastline"),
+    (re.compile(r"\bcypress\b", re.I), "Cypress"),
+    (re.compile(r"\bsilver\s+maple\b", re.I), "Silver Maple"),
+    (re.compile(r"\bkona\b", re.I), "Kona"),
+    (re.compile(r"\bhazel\b", re.I), "Hazel"),
+    (re.compile(r"\benglish\s+walnut\b", re.I), "English Walnut"),
+    (re.compile(r"\bsedona\b", re.I), "Sedona"),
+    (re.compile(r"\brushtic\s+autumn\b", re.I), "Rustic Autumn"),
+    (re.compile(r"\bcement\s+gr[ae]y\b", re.I), "Cement Grey"),
+    (re.compile(r"\bpaver\s+gr[ae]y\b", re.I), "Paver Grey"),
+    # ── Shared / generic ─────────────────────────────────────────────────────
+    (re.compile(r"\bmocha\b", re.I), "Mocha"),
+    (re.compile(r"\bpecan\b", re.I), "Pecan"),
+    (re.compile(r"\bkhaki\b", re.I), "Khaki"),
+    (re.compile(r"\bmahogany\b", re.I), "Mahogany"),
+    (re.compile(r"\bcedar\s+tone\b", re.I), "Cedar Tone"),
+    (re.compile(r"\bnatural\s+cedar\b", re.I), "Natural Cedar"),
+]
+
+
+def _extract_color(text: str) -> str:
+    """Return the first known color name found in text, or empty string."""
+    for pattern, canonical in _KNOWN_COLORS:
+        if pattern.search(text):
+            return canonical
+    return ""
+
+
 def _sold_bucket(days_since: float | None) -> tuple[str, float]:
     if days_since is None:
         return "unknown", 0.25
@@ -119,6 +203,14 @@ def preprocess_raw_catalog(df: pd.DataFrame, now: datetime | None = None) -> pd.
     )
     out["size"] = [s or row_size for (s, _), row_size in zip(inferred_size_len, out["size"]) ]
     out["length"] = [l or "" for (_, l) in inferred_size_len]
+
+    # Color extraction: scan description + ext_description for known color names
+    out["color"] = out.apply(
+        lambda row: _extract_color(
+            f"{row['description']} {row['ext_description']} {row['minor_description']}"
+        ),
+        axis=1,
+    )
 
     out["keyword_string"] = src["keyword_string"].map(_clean_text)
     out["keyword_user_defined"] = src["keyword_user_defined"].map(_clean_text)
@@ -158,6 +250,7 @@ def preprocess_raw_catalog(df: pd.DataFrame, now: datetime | None = None) -> pd.
             row["length"],
             f"{row['length']}ft" if row["length"] else "",
             f"{row['length']} foot" if row["length"] else "",
+            row.get("color", ""),
             row["keywords"],
         ]),
         axis=1,

@@ -47,6 +47,73 @@ _ABBREVIATIONS = {
     r"\bhdg\b": "hot dip galvanized",
     r"\bss\b": "stainless steel",
     r"\bea\b": "each",
+    # Siding / engineered wood brands
+    r"\bhardi\b": "HardiePlank James Hardie",
+    r"\bhardieplank\b": "HardiePlank James Hardie",
+    r"\blp\b": "LP SmartSide Louisiana Pacific",
+    # Hardwood / exotic decking
+    r"\bipe\b": "ipe hardwood decking",
+    # Composite decking
+    r"\bwonaized\b": "wainscot",
+    # ── Trex color code abbreviations (from distributor SKU strings) ─────────
+    r"\bcinncov\b": "cinnamon cove",
+    r"\bcinncv\b": "cinnamon cove",
+    r"\btikitor\b": "tiki torch",
+    r"\btktch\b": "tiki torch",
+    r"\bhavgld\b": "havana gold",
+    r"\bspcrum\b": "spiced rum",
+    r"\blvrk\b": "lava rock",
+    r"\bgrvpth\b": "gravel path",
+    r"\bcldday\b": "cloudy day",
+    r"\bislmst\b": "island mist",
+    r"\brpswng\b": "rope swing",
+    r"\brkhbr\b": "rocky harbor",
+    r"\bvntlnt\b": "vintage lantern",
+    r"\btstsnd\b": "toasted sand",
+    r"\bwthwd\b": "weathered wood",
+    r"\bmnlt\b": "moonlight decking",
+    r"\bpblgry\b": "pebble grey",
+    # NOTE: skipped \bsdl\b — too short, ambiguous in hardware context
+    r"\bwdlnbwn\b": "woodland brown",
+    r"\bclmsh\b": "clam shell",
+    r"\bbchdne\b": "beach dune",
+    r"\bfggywrf\b": "foggy wharf",
+    r"\bssdgry\b": "seaside grey",
+    # ── TimberTech / Azek color code abbreviations ───────────────────────────
+    r"\bwnchgry\b": "winchester grey",
+    r"\bwchgry\b": "winchester grey",
+    # NOTE: skipped \bwng\b — conflicts with "wing" (wing nut, wing bolt)
+    r"\bantlth\b": "antique leather",
+    r"\baql\b": "antique leather",
+    r"\btgrwd\b": "tigerwood",
+    r"\btgw\b": "tigerwood",
+    r"\bwthtk\b": "weathered teak",
+    r"\btrpwlt\b": "tropical walnut",
+    r"\bsndbch\b": "sandy birch",
+    r"\btrntk\b": "terrain teak",
+    r"\brstcdr\b": "rustic cedar",
+    r"\bdrftwd\b": "driftwood",
+    r"\bashwd\b": "ashwood",
+    r"\bwhtwd\b": "whitewood",
+    r"\bsltgry\b": "slate grey",
+    # NOTE: skipped \bslg\b — too short, ambiguous
+    r"\bbrnst\b": "brownstone",
+    # NOTE: skipped \bbwn\b — conflicts with "brown" (very common color abbrev)
+    r"\bwhtoak\b": "white oak",
+    r"\bcstln\b": "coastline",
+    r"\bmah\b": "mahogany",
+    r"\bcyp\b": "cypress",
+    r"\bslvmap\b": "silver maple",
+    r"\bkna\b": "kona",
+    r"\bhzl\b": "hazel",
+    r"\bengwlt\b": "english walnut",
+    r"\bsdn\b": "sedona",
+    r"\brstaut\b": "rustic autumn",
+    r"\bmch\b": "mocha",
+    r"\bpcn\b": "pecan",
+    # ── Board dimension SKU tokens ────────────────────────────────────────────
+    r"\b54x6\b": "5/4x6",  # compiled with IGNORECASE — covers 54X6 too
+    r"\b125x6\b": "5/4x6",
 }
 
 # Pre-compile abbreviation patterns for performance
@@ -236,6 +303,79 @@ def _apply_feedback_rerank(candidates: list[dict], feedback_counts: dict[str, in
     return reranked
 
 
+# Maps well-known color names to the brand(s) they belong to.
+# When a parsed color matches one of these, its implied brand is also used for bonus scoring.
+# Sources: Trex, TimberTech/AZEK distributor pricelists (through Aug 2025).
+# Note: Winchester Grey appears on both Trex Select and TimberTech PRO Reserve — kept as
+#       timbertech since that's the more-specific association; Trex Select is matched via
+#       the "trex" keyword appearing in the catalog description anyway.
+_COLOR_TO_BRAND: dict[str, str] = {
+    # Trex Transcend
+    "cinnamon cove": "trex",
+    "tiki torch": "trex",
+    "havana gold": "trex",
+    "spiced rum": "trex",
+    "lava rock": "trex",
+    "gravel path": "trex",
+    "cloudy day": "trex",
+    "island mist": "trex",
+    "rope swing": "trex",
+    "rocky harbor": "trex",
+    "vintage lantern": "trex",
+    "toasted sand": "trex",
+    "weathered wood": "trex",
+    "moonlight decking": "trex",
+    # Trex Select
+    "pebble grey": "trex",
+    "saddle": "trex",
+    "woodland brown": "trex",
+    # Trex Enhance
+    "clam shell": "trex",
+    "beach dune": "trex",
+    "foggy wharf": "trex",
+    "seaside grey": "trex",
+    "tree house": "trex",
+    "fire pit": "trex",
+    "torchlight": "trex",
+    # TimberTech PRO Reserve (capped composite)
+    "winchester grey": "timbertech",
+    "antique leather": "timbertech",
+    "tigerwood": "timbertech",
+    "weathered teak": "timbertech",
+    "tropical walnut": "timbertech",
+    "sandy birch": "timbertech",
+    "stormy night": "timbertech",
+    "rustic elm": "timbertech",
+    "canyon dusk": "timbertech",
+    "cobalt coast": "timbertech",
+    "dark sienna": "timbertech",
+    # TimberTech PRO Legacy
+    "terrain teak": "timbertech",
+    "rustic cedar": "timbertech",
+    "driftwood": "timbertech",
+    # TimberTech Edge
+    "ashwood": "timbertech",
+    "whitewood": "timbertech",
+    # Azek / TimberTech AZEK (PVC)
+    "slate grey": "azek",
+    "brownstone": "azek",
+    "white oak": "azek",
+    "coastline": "azek",
+    "cypress": "azek",
+    "silver maple": "azek",
+    "kona": "azek",
+    "hazel": "azek",
+    "english walnut": "azek",
+    "sedona": "azek",
+    "rustic autumn": "azek",
+    "cement grey": "azek",
+    "paver grey": "azek",
+    # Shared TimberTech/Azek
+    "mocha": "timbertech",
+    "pecan": "timbertech",
+}
+
+
 def _brand_match_bonus(parsed_brand: str | None, catalog_item: ERPItem) -> float:
     """Score bonus/penalty when the parsed brand matches or conflicts with catalog."""
     if not parsed_brand:
@@ -245,11 +385,11 @@ def _brand_match_bonus(parsed_brand: str | None, catalog_item: ERPItem) -> float
     if not cb:
         searchable = ((catalog_item.description or "") + " " + (getattr(catalog_item, 'keywords', '') or "")).lower()
         if pb in searchable:
-            return 0.06
+            return 0.10
         return 0.0
     if pb == cb or pb in cb or cb in pb:
-        return 0.10
-    return -0.05
+        return 0.18
+    return -0.08
 
 
 def _color_match_bonus(parsed_color: str | None, catalog_item: ERPItem) -> float:
@@ -260,10 +400,18 @@ def _color_match_bonus(parsed_color: str | None, catalog_item: ERPItem) -> float
     cc = (getattr(catalog_item, 'color', '') or "").lower().strip()
     searchable = ((catalog_item.description or "") + " " + (getattr(catalog_item, 'keywords', '') or "")).lower()
     if cc and (pc == cc or pc in cc or cc in pc):
-        return 0.10
+        return 0.18
     if pc in searchable:
-        return 0.06
-    return -0.03
+        return 0.10
+    # Check if this color maps to a known brand and that brand matches catalog
+    implied_brand = _COLOR_TO_BRAND.get(pc)
+    if implied_brand:
+        cb = (getattr(catalog_item, 'brand', '') or "").lower().strip()
+        if cb and (implied_brand in cb or cb in implied_brand):
+            return 0.12
+        if implied_brand in searchable:
+            return 0.08
+    return -0.04
 
 
 def match_item(
@@ -473,7 +621,7 @@ def match_items_batch(
                     "vector_index_miss: no vector hits for %r — falling back to fuzzy-only matching",
                     norm_desc,
                 )
-                candidates = _fuzzy_only_candidates(norm_desc, erp_items, size, length, k=k)
+                candidates = _fuzzy_only_candidates(norm_desc, erp_items, size, length, brand, color, k=k)
 
             candidates.sort(key=lambda x: x["confidence_score"], reverse=True)
             candidates = _apply_feedback_rerank(candidates, feedback_counts)
@@ -501,7 +649,15 @@ def match_items_batch(
     return [results[i] for i in range(len(descriptions))]
 
 
-def _fuzzy_only_candidates(norm_desc: str, erp_items: list, size, length, k: int = 5) -> list[dict]:
+def _fuzzy_only_candidates(
+    norm_desc: str,
+    erp_items: list,
+    size,
+    length,
+    parsed_brand: str | None = None,
+    parsed_color: str | None = None,
+    k: int = 5,
+) -> list[dict]:
     """Pure fuzzy match across all catalog items — used when the vector index is unavailable."""
     from app.services.fuzzy_matcher import fuzzy_match as _fmatch
     scored = []
@@ -512,10 +668,12 @@ def _fuzzy_only_candidates(norm_desc: str, erp_items: list, size, length, k: int
             final_score += 0.08
         if length and item.length and str(item.length) == str(length):
             final_score += 0.08
+        final_score += _brand_match_bonus(parsed_brand, item)
+        final_score += _color_match_bonus(parsed_color, item)
         scored.append({
             "sku": item.sku,
             "description": item.description,
-            "confidence_score": round(min(final_score, 1.0), 4),
+            "confidence_score": round(min(max(final_score, 0.0), 1.0), 4),
             "fuzzy_score": round(f_score, 4),
             "vector_score": 0.0,
             "size": item.size,

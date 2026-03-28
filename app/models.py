@@ -84,6 +84,7 @@ class ERPItem(db.Model):
     size = db.Column(db.String(50), default="")
     length = db.Column(db.String(20), default="")
     brand = db.Column(db.String(150), default="")
+    color = db.Column(db.String(120), default="")
     normalized_name = db.Column(db.String(255), default="")
     branch_system_id = db.Column(db.String(100), default="", index=True)
     ext_description = db.Column(db.String(500), default="")
@@ -125,6 +126,8 @@ class ERPItem(db.Model):
             parts.append(f"{self.length}ft")
         if self.brand:
             parts.append(self.brand)
+        if self.color:
+            parts.append(self.color)
         if self.ai_match_text:
             parts.append(self.ai_match_text)
         elif self.normalized_name:
@@ -147,6 +150,7 @@ class ERPItem(db.Model):
             "size": self.size,
             "length": self.length,
             "brand": self.brand,
+            "color": self.color,
             "normalized_name": self.normalized_name,
             "branch_system_id": self.branch_system_id,
             "ext_description": self.ext_description,

@@ -123,6 +123,7 @@ def import_catalog_dataframe(
             "size": clean_csv_value(row.get("size", ""), 50),
             "length": clean_csv_value(row.get("length", ""), 20),
             "brand": clean_csv_value(row.get("brand", ""), 150),
+            "color": clean_csv_value(row.get("color", ""), 120),
             "normalized_name": clean_csv_value(row.get("normalized_name", ""), 255),
             "unit_of_measure": clean_csv_value(row.get("unit_of_measure", "EA"), 50)
             or "EA",

@@ -33,9 +33,9 @@
     Uploads apply only to the selected branch.
   </p>
   <form action="{{ url_for('main.catalog_upload') }}" method="post" enctype="multipart/form-data">
-    <div class="inline-form">
+    <div class="catalog-upload-form">
       <input type="hidden" name="branch_id" value="{{ selected_branch.id if selected_branch else '' }}" />
-      <input type="file" name="file" accept=".csv,.xlsx,.xls" required class="file-input-inline" />
+      <input type="file" name="file" accept=".csv,.xlsx,.xls" required class="file-input-inline catalog-file-input" />
       <label class="checkbox-label">
         <input type="checkbox" name="replace_all" value="1" />
         Replace {{ selected_branch.code if selected_branch else 'branch' }} catalog

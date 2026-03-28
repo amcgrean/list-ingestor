@@ -495,6 +495,13 @@ body {
 .inline-form { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
 .stack-form { display: flex; flex-direction: column; gap: .75rem; max-width: 440px; }
 .file-input-inline { font-size: .875rem; }
+.catalog-upload-form {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  flex-wrap: wrap;
+}
+.catalog-file-input { flex: 1 1 220px; min-width: 0; }
 .checkbox-label { display: flex; align-items: center; gap: .35rem; font-size: .875rem; cursor: pointer; }
 .branch-picker { margin-bottom: 1rem; }
 .branch-select { min-width: 140px; }
@@ -659,6 +666,14 @@ body {
   /* Upload */
   .mobile-upload-actions { display: flex; }
   .drop-zone { padding: 1.75rem 1rem; }
+
+  /* Catalog upload form — stack vertically on mobile */
+  .catalog-upload-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .catalog-file-input { width: 100%; }
+  .catalog-upload-form .btn { width: 100%; justify-content: center; min-height: 42px; }
   .drop-zone-label .browse-link { display: none; }
   .upload-card { max-width: 100%; }
   .search-input { max-width: 100%; }

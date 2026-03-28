@@ -363,6 +363,18 @@ def admin_users():
         branches=_all_branches(),
     )
 
+@main.route("/admin/clean-nan-brands", methods=["POST"])
+def admin_clean_nan_brands():
+    _require_admin()
+    updated = (
+        ERPItem.query
+        .filter(ERPItem.brand.ilike("nan"))
+        .update({"brand": ""}, synchronize_session=False)
+    )
+    db.session.commit()
+    return jsonify({"cleaned": updated})
+
+
 @main.route("/")
 def index():
     user = _current_user()
@@ -688,6 +700,8 @@ def upload():
                 fuzzy_weight=current_app.config["FUZZY_WEIGHT"],
                 vector_weight=current_app.config["VECTOR_WEIGHT"],
                 cache_key=f"branch:{branch.id}",
+                parsed_brands=[item.get("brand") for item in parsed_items],
+                parsed_colors=[item.get("color") for item in parsed_items],
             )
         except Exception:
             logger.exception("Item matching failed for session %d", session.id, extra={
@@ -963,28 +977,43 @@ def reprocess_session(session_id):
     merged_context = normalize_document_context(_load_json_blob(session.extracted_context_json))
     synced_context_payload = _load_json_blob(session.matched_context_json) or {}
 
-    descriptions = [
-        enrich_description_for_matching(
-            item.raw_description,
-            upload_context=upload_ctx,
-            document_context={
-                **merged_context,
-                "global_material_context": list(
-                    dict.fromkeys(
-                        merged_context.get("global_material_context", [])
-                        + ([synced_context_payload.get("material_context")] if synced_context_payload.get("material_context") else [])
-                    )
-                ),
-                "job_notes": list(
-                    dict.fromkeys(
-                        merged_context.get("job_notes", [])
-                        + ([synced_context_payload.get("job_notes")] if synced_context_payload.get("job_notes") else [])
-                    )
-                ),
-            },
+    # Build enriched match descriptions.  Prefer the stored normalized_description
+    # (which carries section-header context from the original parse) over raw_description.
+    # Reconstruct match_text the same way stage_c does: section_header + brand + color +
+    # product_family + product_type + normalized_description.
+    descriptions = []
+    for item in items:
+        base = item.normalized_description or item.raw_description
+        parts = [
+            item.section_header or "",
+            item.brand or "",
+            item.color or "",
+            item.product_family or "",
+            item.product_type or "",
+            base,
+        ]
+        reconstructed = " ".join(p for p in parts if p).strip() or item.raw_description
+        descriptions.append(
+            enrich_description_for_matching(
+                reconstructed,
+                upload_context=upload_ctx,
+                document_context={
+                    **merged_context,
+                    "global_material_context": list(
+                        dict.fromkeys(
+                            merged_context.get("global_material_context", [])
+                            + ([synced_context_payload.get("material_context")] if synced_context_payload.get("material_context") else [])
+                        )
+                    ),
+                    "job_notes": list(
+                        dict.fromkeys(
+                            merged_context.get("job_notes", [])
+                            + ([synced_context_payload.get("job_notes")] if synced_context_payload.get("job_notes") else [])
+                        )
+                    ),
+                },
+            )
         )
-        for item in items
-    ]
 
     try:
         match_results = item_matcher.match_items_batch(
@@ -994,6 +1023,8 @@ def reprocess_session(session_id):
             fuzzy_weight=current_app.config["FUZZY_WEIGHT"],
             vector_weight=current_app.config["VECTOR_WEIGHT"],
             cache_key=f"branch:{branch.id}" if branch else "default",
+            parsed_brands=[item.brand for item in items],
+            parsed_colors=[item.color for item in items],
         )
     except Exception:
         logger.exception("Reprocess matching failed for session %d", session_id)
@@ -1199,6 +1230,8 @@ def catalog_upload():
             embedding_model=current_app.config["EMBEDDING_MODEL"],
             output_dir=Path(current_app.root_path).parent / "data" / "catalog",
         )
+        # Invalidate the global "default" index so it re-encodes with fresh data
+        item_matcher.clear_index("default")
         if summary["vector_count"]:
             embed_msg = f" Vector index built for {summary['catalog_count']} items."
         else:

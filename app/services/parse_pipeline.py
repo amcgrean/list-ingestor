@@ -122,7 +122,7 @@ def stage_c_prepare_for_matching(stage_b_lines: list[ContextualizedLine]) -> lis
             "inferred_use": line.inferred_use,
         }
         match_text = line.normalized_description or line.raw_text
-        parts = [line.brand, line.color, line.product_family, line.product_type, line.dimensions, match_text]
+        parts = [line.inherited_section_header, line.brand, line.color, line.product_family, line.product_type, line.dimensions, match_text]
         normalized_match_text = " ".join(part for part in parts if part).strip()
         out.append(
             MatchReadyLine(
