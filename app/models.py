@@ -431,6 +431,7 @@ class ExtractedItem(db.Model):
         except (json.JSONDecodeError, TypeError):
             return []
 
+    @property
     def erp_description(self):
         """Return the human-readable ERP description for the currently matched/final item.
 
