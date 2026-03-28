@@ -73,25 +73,34 @@ def _sync_table_columns(model):
         if column.name in existing_columns:
             continue
 
-        column_type = column.type.compile(dialect=db.engine.dialect)
-        if column.server_default is not None:
-            default_sql = (
-                column.server_default.arg
-                if hasattr(column.server_default, "arg")
-                else str(column.server_default)
+        try:
+            column_type = column.type.compile(dialect=db.engine.dialect)
+            if column.server_default is not None:
+                default_sql = (
+                    column.server_default.arg
+                    if hasattr(column.server_default, "arg")
+                    else str(column.server_default)
+                )
+                default_clause = f" DEFAULT {default_sql}"
+            else:
+                default_clause = ""
+            nullable_clause = "" if column.nullable else " NOT NULL"
+            db.session.execute(
+                text(
+                    f"ALTER TABLE {table_name} ADD COLUMN {column.name} "
+                    f"{column_type}{default_clause}{nullable_clause}"
+                )
             )
-            default_clause = f" DEFAULT {default_sql}"
-        else:
-            default_clause = ""
-        nullable_clause = "" if column.nullable else " NOT NULL"
-        db.session.execute(
-            text(
-                f"ALTER TABLE {table_name} ADD COLUMN {column.name} "
-                f"{column_type}{default_clause}{nullable_clause}"
+            db.session.commit()
+            logging.getLogger(__name__).info(
+                "Added column %s.%s", table_name, column.name
             )
-        )
-
-    db.session.commit()
+        except Exception:
+            db.session.rollback()
+            logging.getLogger(__name__).warning(
+                "Failed to add column %s.%s — may already exist",
+                table_name, column.name, exc_info=True,
+            )
 
 
 def _ensure_default_branches(app):

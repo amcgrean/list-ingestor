@@ -92,7 +92,7 @@
             data-confirmed="{{ 'true' if item.is_confirmed else 'false' }}"
             data-skipped="{{ 'true' if item.is_skipped else 'false' }}"
             data-candidates="{{ item.candidates_json or '[]' }}"
-            data-flags="{{ item.parsed_ambiguity_flags|join(',') }}">
+            data-flags="{{ item.parsed_ambiguity_flags|default([])|join(',') }}">
 
           <!-- Skip checkbox -->
           <td class="col-skip">
@@ -112,9 +112,9 @@
           <!-- Extracted description -->
           <td class="col-raw">
             <span class="raw-desc">{{ item.raw_description }}</span>
-            {% if item.parsed_ambiguity_flags %}
+            {% if item.parsed_ambiguity_flags|default([]) %}
             <div class="flag-badges">
-              {% for flag in item.parsed_ambiguity_flags %}
+              {% for flag in item.parsed_ambiguity_flags|default([]) %}
               <span class="flag-badge {% if flag == 'crossed_out' %}flag-crossed{% elif flag == 'quantity_uncertain' %}flag-uncertain{% elif flag == 'pricing_only' %}flag-pricing{% endif %}">{{ flag|replace('_', ' ') }}</span>
               {% endfor %}
             </div>
