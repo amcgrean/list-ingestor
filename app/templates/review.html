@@ -19,7 +19,7 @@
 
 <div class="card">
   {% if session.upload_context or extracted_context.summary or extracted_context.customer_name or extracted_context.project_name or extracted_context.global_material_context or extracted_context.job_notes or matched_context %}
-  <div class="feedback-panel">
+  <div class="feedback-panel" style="margin-top:0; margin-bottom:1rem;">
     <h2 class="section-title">Detected Context</h2>
     {% if session.upload_context %}
     <p><strong>Upload notes:</strong> {{ session.upload_context }}</p>
@@ -30,7 +30,7 @@
     {% if extracted_context.customer_name or extracted_context.project_name %}
     <p>
       {% if extracted_context.customer_name %}<strong>Customer:</strong> {{ extracted_context.customer_name }}{% endif %}
-      {% if extracted_context.customer_name and extracted_context.project_name %} | {% endif %}
+      {% if extracted_context.customer_name and extracted_context.project_name %} &mdash; {% endif %}
       {% if extracted_context.project_name %}<strong>Project:</strong> {{ extracted_context.project_name }}{% endif %}
     </p>
     {% endif %}
@@ -74,14 +74,14 @@
     <table class="data-table review-table" id="review-table">
       <thead>
         <tr>
-          <th style="width:60px">Skip</th>
-          <th style="width:90px">Qty</th>
+          <th style="width:54px">Skip</th>
+          <th style="width:80px">Qty</th>
           <th>Extracted Description</th>
           <th>Matched ERP Item</th>
           <th style="width:130px">Item Code</th>
-          <th style="width:110px">Confidence</th>
-          <th style="width:190px">Comment</th>
-          <th style="width:70px">OK</th>
+          <th style="width:105px">Confidence</th>
+          <th style="width:185px">Comment</th>
+          <th style="width:54px">OK</th>
         </tr>
       </thead>
       <tbody>
@@ -94,23 +94,22 @@
             data-candidates="{{ item.candidates_json or '[]' }}"
             data-flags="{{ item.parsed_ambiguity_flags|default([])|join(',') }}">
 
-          <!-- Skip checkbox -->
-          <td class="col-skip">
+          <!-- Skip -->
+          <td class="col-skip" data-label="Skip">
             <label class="checkbox-wrap">
               <input type="checkbox" class="skip-cb" {% if item.is_skipped %}checked{% endif %} />
-              <span class="checkmark"></span>
             </label>
           </td>
 
           <!-- Quantity -->
-          <td class="col-qty">
+          <td class="col-qty" data-label="Qty">
             <input type="number" class="qty-input input-sm"
                    value="{{ item.effective_quantity()|int if item.effective_quantity() == item.effective_quantity()|int else item.effective_quantity() }}"
                    min="0" step="any" />
           </td>
 
           <!-- Extracted description -->
-          <td class="col-raw">
+          <td class="col-raw" data-label="Extracted">
             <span class="raw-desc">{{ item.raw_description }}</span>
             {% if item.parsed_ambiguity_flags|default([]) %}
             <div class="flag-badges">
@@ -121,8 +120,8 @@
             {% endif %}
           </td>
 
-          <!-- Matched item description + autocomplete -->
-          <td class="col-desc">
+          <!-- Matched item + autocomplete -->
+          <td class="col-desc" data-label="Matched">
             <div class="autocomplete-wrap">
               <input type="text" class="desc-input input-sm"
                      value="{{ item.erp_description if item.matched_item_code else '' }}"
@@ -132,32 +131,33 @@
             </div>
           </td>
 
-          <!-- Item code (read-only display) -->
-          <td class="col-code">
+          <!-- Item code -->
+          <td class="col-code" data-label="Code">
             <span class="item-code-display">{{ item.effective_item_code() or '—' }}</span>
             <input type="hidden" class="item-code-hidden" value="{{ item.effective_item_code() or '' }}" />
           </td>
 
           <!-- Confidence -->
-          <td class="col-conf">
-            <div class="conf-bar-wrap" title="Fuzzy: {{ (item.fuzzy_score * 100)|round(1) }}% | Vector: {{ (item.vector_score * 100)|round(1) }}%">
-              <div class="conf-bar" style="width: {{ [item.confidence_score * 100, 100]|min|round }}%"></div>
+          <td class="col-conf" data-label="Conf">
+            <div>
+              <div class="conf-bar-wrap {% if low_conf %}conf-low{% endif %}" title="Fuzzy: {{ (item.fuzzy_score * 100)|round(1) }}% | Vector: {{ (item.vector_score * 100)|round(1) }}%">
+                <div class="conf-bar" style="width: {{ [item.confidence_score * 100, 100]|min|round }}%"></div>
+              </div>
+              <span class="conf-label {% if low_conf %}conf-low-label{% endif %}">
+                {{ (item.confidence_score * 100)|round(1) }}%
+              </span>
             </div>
-            <span class="conf-label {% if low_conf %}conf-low{% endif %}">
-              {{ (item.confidence_score * 100)|round(1) }}%
-            </span>
           </td>
 
-          <!-- Per-line comment -->
-          <td class="col-comment">
-            <input type="text" class="item-comment input-sm" placeholder="Optional comment (why changed?)" />
+          <!-- Comment -->
+          <td class="col-comment" data-label="Note">
+            <input type="text" class="item-comment input-sm" placeholder="Optional note…" />
           </td>
 
-          <!-- Confirm checkbox -->
-          <td class="col-confirm">
+          <!-- Confirm -->
+          <td class="col-confirm" data-label="OK">
             <label class="checkbox-wrap">
               <input type="checkbox" class="confirm-cb" {% if item.is_confirmed %}checked{% endif %} />
-              <span class="checkmark"></span>
             </label>
           </td>
         </tr>
@@ -168,17 +168,20 @@
 
   <div class="feedback-panel">
     <label for="session-comment" class="provider-label">Session feedback / notes</label>
-    <textarea id="session-comment" class="input-sm" rows="3" placeholder="Tell us what was wrong or missing in this pass...">{{ session.session_comment or '' }}</textarea>
+    <textarea id="session-comment" class="input-sm" rows="3" placeholder="Tell us what was wrong or missing in this pass…">{{ session.session_comment or '' }}</textarea>
     <div class="feedback-actions">
-      <label><input type="checkbox" id="request-reprocess" {% if session.feedback_reprocess_requested %}checked{% endif %}/> Re-run matching with this feedback &amp; learned corrections</label>
+      <label style="font-size:.875rem;display:flex;align-items:center;gap:.4rem;">
+        <input type="checkbox" id="request-reprocess" {% if session.feedback_reprocess_requested %}checked{% endif %} />
+        Re-run matching with feedback &amp; corrections
+      </label>
       <button type="button" class="btn btn-primary btn-sm" id="reprocess-btn">Save &amp; Reprocess</button>
     </div>
-    <div id="reprocess-status" class="hidden" style="margin-top:0.5rem;color:#6b7280;font-size:0.85rem;"></div>
+    <div id="reprocess-status" class="hidden" style="margin-top:.5rem;color:var(--gray-500);font-size:.85rem;"></div>
   </div>
 
   <!-- Export bar -->
   <div class="export-bar">
-    <span class="export-label">Export reviewed list:</span>
+    <span class="export-label">Export:</span>
     <a class="btn btn-sm btn-secondary" href="{{ url_for('main.export', session_id=session.id, fmt='csv') }}">CSV</a>
     <a class="btn btn-sm btn-secondary" href="{{ url_for('main.export', session_id=session.id, fmt='xlsx') }}">Excel</a>
     <a class="btn btn-sm btn-secondary" href="{{ url_for('main.export', session_id=session.id, fmt='json') }}">JSON</a>
@@ -189,6 +192,12 @@
 <div class="card">
   <button class="btn btn-outline btn-sm" id="toggle-raw-btn">Show Extracted Text</button>
   <pre id="raw-text" class="raw-text hidden">{{ session.raw_ocr_text }}</pre>
+</div>
+
+<!-- Mobile sticky save bar -->
+<div class="mobile-save-bar" id="mobile-save-bar">
+  <span id="mobile-save-status" class="save-status"></span>
+  <button class="btn btn-primary" id="mobile-save-btn" style="flex:1;justify-content:center;min-height:44px;">Save Changes</button>
 </div>
 
 {% endif %}
@@ -202,4 +211,21 @@
   window.REPROCESS_URL = "{{ url_for('main.reprocess_session', session_id=session.id) }}";
 </script>
 <script src="{{ url_for('static', filename='js/review.js') }}"></script>
+<script>
+  // Wire mobile save button to same save logic
+  (function () {
+    var mobileBtn = document.getElementById('mobile-save-btn');
+    var mobileStatus = document.getElementById('mobile-save-status');
+    if (!mobileBtn) return;
+    mobileBtn.addEventListener('click', function () {
+      document.getElementById('save-btn') && document.getElementById('save-btn').click();
+      // Mirror status
+      var obs = new MutationObserver(function () {
+        mobileStatus.textContent = document.getElementById('save-status').textContent;
+      });
+      var ss = document.getElementById('save-status');
+      if (ss) obs.observe(ss, { childList: true, characterData: true, subtree: true });
+    });
+  }());
+</script>
 {% endblock %}

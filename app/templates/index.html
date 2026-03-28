@@ -77,14 +77,15 @@
 {% if sessions %}
 <div class="card">
   <h2 class="section-title">Recent Sessions</h2>
-  <table class="data-table">
+  <div class="table-wrapper">
+  <table class="data-table sessions-table">
     <thead>
       <tr>
         <th>File</th>
-        <th>Branch</th>
+        <th class="col-branch">Branch</th>
         <th>Status</th>
         <th>Items</th>
-        <th>Date</th>
+        <th class="col-date">Date</th>
         <th>Actions</th>
       </tr>
     </thead>
@@ -92,10 +93,10 @@
       {% for s in sessions %}
       <tr>
         <td>{{ s.filename }}</td>
-        <td>{{ s.branch.code if s.branch else '—' }}</td>
+        <td class="col-branch">{{ s.branch.code if s.branch else '—' }}</td>
         <td><span class="badge badge-{{ s.status }}">{{ s.status }}</span></td>
         <td>{{ s.item_count }}</td>
-        <td>{{ s.created_at.strftime('%b %d, %Y %H:%M') }}</td>
+        <td class="col-date">{{ s.created_at.strftime('%b %d, %Y %H:%M') }}</td>
         <td>
           {% if s.status not in ('pending', 'error') %}
             <a class="btn btn-sm btn-secondary" href="{{ url_for('main.review', session_id=s.id) }}">Review</a>
@@ -108,6 +109,7 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
 </div>
 {% endif %}
 {% endblock %}

@@ -8,10 +8,13 @@
 </head>
 <body>
   <nav class="navbar">
-    <div class="nav-inner">
+    <div class="nav-inner" id="nav-inner">
       <a class="nav-brand" href="{{ url_for('main.index') }}">
         <span class="brand-icon">&#9660;</span> Material Ingestor
       </a>
+      <button class="nav-hamburger" id="nav-hamburger" aria-label="Toggle menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
       <div class="nav-links">
         <a href="{{ url_for('main.index') }}" {% if request.endpoint == 'main.index' %}class="active"{% endif %}>Upload</a>
         <a href="{{ url_for('main.catalog') }}" {% if request.endpoint and 'catalog' in request.endpoint %}class="active"{% endif %}>ERP Catalog</a>
@@ -53,6 +56,27 @@
   <footer class="footer">
     <p>Material List Ingestor &mdash; ERP-ready order conversion</p>
   </footer>
+
+  <script>
+    (function () {
+      var btn = document.getElementById('nav-hamburger');
+      var inner = document.getElementById('nav-inner');
+      if (!btn) return;
+      btn.addEventListener('click', function () {
+        var open = inner.classList.toggle('menu-open');
+        btn.classList.toggle('open', open);
+        btn.setAttribute('aria-expanded', open);
+      });
+      // Close on outside click
+      document.addEventListener('click', function (e) {
+        if (!inner.contains(e.target)) {
+          inner.classList.remove('menu-open');
+          btn.classList.remove('open');
+          btn.setAttribute('aria-expanded', 'false');
+        }
+      });
+    }());
+  </script>
 
   {% block scripts %}{% endblock %}
 </body>
