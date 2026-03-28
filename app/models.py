@@ -422,7 +422,6 @@ class ExtractedItem(db.Model):
         return self.final_item_code or self.matched_item_code
 
     @property
-    @property
     def parsed_ambiguity_flags(self):
         """Return ambiguity_flags as a Python list (parsed from JSON column)."""
         if not self.ambiguity_flags:
