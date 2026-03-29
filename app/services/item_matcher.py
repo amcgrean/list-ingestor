@@ -25,37 +25,78 @@ _log = _logging.getLogger(__name__)
 
 
 _ABBREVIATIONS = {
+    # ── Industry abbreviations ──────────────────────────────────────────────
     r"\bpt\b": "pressure treated",
     r"\brh\b": "right hand",
     r"\blh\b": "left hand",
-    r"\blvl\b": "laminated veneer lumber",
-    r"\bosb\b": "oriented strand board",
-    r"\bspf\b": "spruce pine fir",
-    r"\bsyp\b": "southern yellow pine",
-    r"\bdf\b": "douglas fir",
-    r"\bkd\b": "kiln dried",
-    r"\bs4s\b": "surfaced four sides",
-    r"\bwrc\b": "western red cedar",
-    r"\bmca\b": "micronized copper azole",
+    r"\bss\b": "stainless steel",
+    r"\bea\b": "each",
+    r"\bhdg\b": "hot dip galvanized",
+    r"\bpvc\b": "PVC",
     r"\blf\b": "linear feet",
     r"\bsf\b": "square feet",
     r"\bbf\b": "board feet",
+    r"\bkd\b": "kiln dried",
+    r"\bs4s\b": "surfaced four sides",
+    # ── Species / grade abbreviations ───────────────────────────────────────
+    r"\bsyp\b": "southern yellow pine",
+    r"\bspf\b": "spruce pine fir",
+    r"\bdf\b": "douglas fir",
+    r"\bwrc\b": "western red cedar",
+    r"\bdfl\b": "douglas fir larch",
+    r"\bhem-?fir\b": "hemlock fir",
+    # ── Treatment / retention abbreviations ─────────────────────────────────
+    r"\bmca\b": "micronized copper azole",
+    r"\bacq\b": "ACQ pressure treated",
+    r"\bground\s*contact\b": "ground contact .40 treated",
+    r"\babove\s*ground\b": "above ground treated",
+    # ── Structural member terms ─────────────────────────────────────────────
+    # Contractors call dimensional lumber by its structural use (joists, rafters,
+    # studs) but the catalog describes it by grade/species.  Injecting "lumber"
+    # steers the vector encoder toward dimensional lumber and away from hardware
+    # that shares the same name (e.g. "joist hanger", "post anchor").
+    # NOTE: More-specific multi-word patterns (rim joist, i-joist) must appear
+    # BEFORE the generic \bjoists?\b so they match first.
+    r"\brim\s*(?:joist|board)s?\b": "rim board lumber timberstrand",
+    r"\bledger\b": "ledger board treated lumber",
+    r"\bmudsills?\b": "mudsill sill plate treated lumber",
+    r"\bsill\s*plates?\b": "sill plate treated lumber",
+    r"\brafters?\b": "lumber rafter",
+    r"\bstringers?\b": "lumber stair stringer",
+    r"\bsleepers?\b": "lumber sleeper",
+    r"\bblocking\b": "blocking lumber short",
+    r"\bfurring\b": "furring strip lumber",
+    # ── Engineered wood ─────────────────────────────────────────────────────
+    # i-joist MUST come before the generic joist pattern below
+    r"\blvl\b": "laminated veneer lumber",
     r"\btji\b": "trus joist i-joist",
+    r"\bi-?joists?\b": "trus joist i-joist TJI",
+    r"\bglu-?lam\b": "glulam",
+    # Generic joist — AFTER i-joist and rim joist patterns
+    r"\bjoists?\b": "lumber joist",
+    r"\blsl\b": "laminated strand lumber LSL timberstrand",
+    r"\bpsl\b": "parallel strand lumber PSL parallam",
+    r"\bmicrollam\b": "LVL microllam laminated veneer lumber",
+    r"\bparallam\b": "PSL parallam parallel strand lumber",
+    # ── Hardware trade synonyms ─────────────────────────────────────────────
+    # Contractors say "lag bolts" — catalog says "Hex Lag Screw"
+    r"\blag\s*bolts?\b": "lag screw",
+    r"\blags\b": "lag screw",
+    r"\bthrough\s*bolts?\b": "carriage bolt",
+    r"\bspindles?\b": "baluster spindle",
     r"\bgrk\b": "GRK fastener",
     r"\blus\b": "Simpson LUS joist hanger",
-    r"\bpvc\b": "PVC",
-    r"\bhdg\b": "hot dip galvanized",
-    r"\bglu-?lam\b": "glulam",
-    r"\bjoists?\b": "lumber joist",  # "2x10 joists" → "2x10 lumber joist" so vector sees lumber
-    r"\bss\b": "stainless steel",
-    r"\bea\b": "each",
-    # Siding / engineered wood brands
+    r"\bstructural\s*screws?\b": "structural screw GRK RSS",
+    r"\bdeck\s*boards?\b": "decking deck board",
+    r"\bdeck\s*screws?\b": "deck screw exterior fastener",
+    r"\bhidden\s*fasteners?\b": "hidden fastener clip camo",
+    # ── Siding / engineered wood brands ─────────────────────────────────────
     r"\bhardi\b": "HardiePlank James Hardie",
     r"\bhardieplank\b": "HardiePlank James Hardie",
     r"\blp\b": "LP SmartSide Louisiana Pacific",
-    # Hardwood / exotic decking
+    # ── Hardwood / exotic decking ───────────────────────────────────────────
     r"\bipe\b": "ipe hardwood decking",
-    # Composite decking
+    # ── Misc ────────────────────────────────────────────────────────────────
     r"\bwonaized\b": "wainscot",
     # ── Trex color code abbreviations (from distributor SKU strings) ─────────
     r"\bcinncov\b": "cinnamon cove",
@@ -411,7 +452,7 @@ def _finish_conflict_penalty(query_norm: str, catalog_searchable: str) -> float:
 # *query*, give a +0.06 bonus if that exact string also appears in the catalog
 # item description/searchable text.  This prevents cases like "3-1/8" screw"
 # matching "1-1/2" screw" just because the vector similarity for both is high.
-_DIM_RE = re.compile(r'\b(\d+[-\u2013]\d+/\d+|\d+/\d+)\b')
+_DIM_RE = re.compile(r'\b(\d+[-\u2013]\d+/\d+|\d+/\d+|\d+x\d+)\b', re.IGNORECASE)
 
 
 def _dimension_text_bonus(query_norm: str, catalog_searchable: str) -> float:
