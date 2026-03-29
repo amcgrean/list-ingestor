@@ -18,6 +18,43 @@ from app.services.upload_context import normalize_document_context
 logger = logging.getLogger(__name__)
 register_heif_opener()
 
+
+def _extract_categories_from_summary(summary: str) -> list[str]:
+    """Pull product/category names from a document summary as a fallback.
+
+    Looks for patterns like "categories including X, Y, Z and W" or
+    "sections: X, Y, Z" in the summary text.  Returns deduplicated names.
+    """
+    import re as _re
+
+    patterns = [
+        _re.compile(
+            r"(?:categories|sections|headings|groups?)\s+(?:including|such as|like|:)\s*(.+?)(?:\.|$)",
+            _re.IGNORECASE,
+        ),
+        _re.compile(
+            r"(?:with|for)\s+(?:categories|sections|products?)\s*(?:including|:)\s*(.+?)(?:\.|$)",
+            _re.IGNORECASE,
+        ),
+    ]
+    for pat in patterns:
+        m = pat.search(summary)
+        if m:
+            raw = m.group(1)
+            # Split on commas and "and"
+            parts = _re.split(r"\s*,\s*|\s+and\s+", raw)
+            cleaned = []
+            for p in parts:
+                p = p.strip().rstrip(".")
+                # Strip leading "and" left over from Oxford comma splits
+                p = _re.sub(r"^and\s+", "", p, flags=_re.IGNORECASE)
+                # Strip trailing generic nouns
+                p = _re.sub(r"\s+(?:materials?|items?|products?|sections?|lumber)$", "", p, flags=_re.IGNORECASE)
+                if p and len(p) > 2:
+                    cleaned.append(p)
+            return cleaned
+    return []
+
 _WORKFLOW_CONTEXT = (
     "These uploads are usually customer or competitor material lists in handwritten, typed, or mixed formats. "
     "Treat all provided pages/images as one document set when more than one file is supplied. "
@@ -222,6 +259,18 @@ class VisionExtractService:
             "Preserve order, hierarchy, and note lines. "
             "Identify probable section headers, child items, accessories, carry-down notes, and annotations. "
             "Extract quantities and dimensions but do not over-infer missing details. "
+            "\n\n"
+            "CRITICAL — Section header handling:\n"
+            "When the document groups items under headings (e.g. a product name, brand/color, or category "
+            "like 'Cinnamon Cove:', 'Pressure Treated:', 'White Azek'), you MUST:\n"
+            "1. Output each heading as its own line with section_type='header', raw_text=the heading text, "
+            "and quantity=0.\n"
+            "2. Set section_header on EVERY child item line underneath that heading to the heading text, "
+            "until a new heading appears.\n"
+            "Example: if the document reads 'Cinnamon Cove:\\n -56 Grooved x 12\\n -13 Round x 16', "
+            "output three lines: one header line with raw_text='Cinnamon Cove' and section_type='header', "
+            "then two item lines each with section_header='Cinnamon Cove'.\n"
+            "Do NOT put section heading information only in document_context — it must also appear on each child line's section_header field.\n\n"
             "When a row inherits brand, color, material, or product-family context from a heading or general note, "
             "keep the raw row text intact and capture that relationship through section_header and unresolved_tokens rather than silently rewriting the row. "
             f"When more than one file is provided, every line must include file_index as an integer from 1 to {file_count}. "
@@ -254,10 +303,19 @@ class VisionExtractService:
             parsed = {"document_context": _empty_document_context(), "lines": parsed}
         elif not isinstance(parsed, dict):
             parsed = {"document_context": _empty_document_context(), "lines": []}
-        return {
-            "document_context": normalize_document_context(parsed.get("document_context")),
-            "lines": parsed.get("lines", []),
-        }
+        doc_ctx = normalize_document_context(parsed.get("document_context"))
+        lines = parsed.get("lines", [])
+
+        # Fallback: if lines lack section_header but doc summary mentions categories,
+        # extract category names into global_material_context so they reach match enrichment
+        has_headers = any(
+            str(l.get("section_header", "")).strip() or str(l.get("section_type", "")) == "header"
+            for l in lines
+        )
+        if not has_headers and doc_ctx.get("summary") and not doc_ctx.get("global_material_context"):
+            doc_ctx["global_material_context"] = _extract_categories_from_summary(doc_ctx["summary"])
+
+        return {"document_context": doc_ctx, "lines": lines}
 
     def _lines_have_valid_file_indexes(self, lines: list[dict[str, Any]], file_count: int) -> bool:
         if file_count <= 1:
