@@ -346,6 +346,7 @@ class ProcessingSession(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
     raw_ocr_text = db.Column(db.Text, default="")
     status = db.Column(db.String(50), default="pending")
+    progress_message = db.Column(db.String(255), nullable=True)
     error_message = db.Column(db.Text, nullable=True)
     system_id = db.Column(db.String(100), default="", index=True)
     upload_context = db.Column(db.Text, nullable=True)

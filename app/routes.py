@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import tempfile
+import threading
 import time
 import uuid
 from typing import Any
@@ -399,19 +400,374 @@ def index():
     )
 
 
+@main.route("/api/session/<int:session_id>/status")
+def session_status(session_id):
+    """Poll endpoint for async upload processing status."""
+    session = ProcessingSession.query.get_or_404(session_id)
+    result = {
+        "status": session.status,
+        "progress_message": session.progress_message or "",
+    }
+    if session.status == "matched":
+        result["redirect"] = url_for("main.review", session_id=session_id)
+        result["item_count"] = len(session.items)
+    elif session.status == "error":
+        result["error"] = session.error_message or "Unknown error"
+    return jsonify(result)
+
+
+def _update_progress(session_id: int, message: str) -> None:
+    """Update the progress message on a processing session (called from background thread)."""
+    session = ProcessingSession.query.get(session_id)
+    if session:
+        session.progress_message = message
+        db.session.commit()
+
+
+def _process_session_background(app, session_id, saved_uploads, branch_id, upload_context, system_id):
+    """Run the full parse+match pipeline in a background thread."""
+    with app.app_context():
+        session = ProcessingSession.query.get(session_id)
+        branch = db.session.get(Branch, branch_id)
+        if not session or not branch:
+            return
+
+        t_start = time.perf_counter()
+        ai_ms = match_ms = None
+        ai_parse_error = match_error = False
+        provider = "openai"
+
+        api_key = app.config.get("OPENAI_API_KEY", "")
+        t0 = time.perf_counter()
+        parsed_items: list[dict[str, Any]] = []
+        document_contexts: list[dict[str, Any]] = []
+        parse_stage_label = "legacy"
+
+        n_files = len(saved_uploads)
+        _update_progress(session_id, f"Extracting text from {n_files} file{'s' if n_files != 1 else ''}...")
+
+        try:
+            upload_paths = [path for _, path in saved_uploads]
+            use_context_pipeline = app.config.get("ENABLE_CONTEXT_PIPELINE", True)
+
+            if use_context_pipeline:
+                try:
+                    _update_progress(session_id, "Running AI extraction and context interpretation...")
+                    _, _, stage_c_lines, stage_document_context = parse_uploads(
+                        upload_paths,
+                        api_key=api_key,
+                        session_id=session.id,
+                        upload_context=upload_context,
+                    )
+                    parsed_items = [
+                        {
+                            "line_id": line.line_id,
+                            "quantity": line.quantity,
+                            "description": line.raw_text,
+                            "raw_text": line.raw_text,
+                            "source_description": line.raw_text,
+                            "applied_context": [value for value in (line.section_header,) if value],
+                            "normalized_description": line.normalized_description,
+                            "section_header": line.section_header,
+                            "brand": line.brand,
+                            "color": line.color,
+                            "product_family": line.product_family,
+                            "product_type": line.product_type,
+                            "ambiguity_flags": line.ambiguity_flags,
+                            "review_reason": line.review_reason,
+                            "needs_review": line.needs_review,
+                            "match_text": line.match_text,
+                        }
+                        for line in stage_c_lines
+                    ]
+                    parse_stage_label = "context_stage_c"
+                    if stage_document_context:
+                        document_contexts.append(stage_document_context)
+                except Exception:
+                    if not app.config.get("CONTEXT_PIPELINE_FALLBACK_TO_LEGACY", True):
+                        raise
+                    logger.exception("Context pipeline failed; falling back to legacy single-pass parsing")
+
+            if not parsed_items:
+                csv_uploads = []
+                visual_uploads = []
+                for _, file_path in saved_uploads:
+                    ext = file_path.suffix.lstrip(".").lower()
+                    if ext == "csv":
+                        csv_uploads.append(file_path)
+                    else:
+                        visual_uploads.append(file_path)
+
+                for file_path in csv_uploads:
+                    parsed_items.extend(parse_csv_items(file_path))
+
+                if visual_uploads:
+                    if not api_key:
+                        raise RuntimeError("OPENAI_API_KEY is not configured for image/pdf parsing.")
+                    raw_results = _vision_extract_documents(visual_uploads, api_key)
+                    if isinstance(raw_results, dict):
+                        raw_list = raw_results.get("lines", [])
+                        doc_ctx = raw_results.get("document_context")
+                        if doc_ctx:
+                            document_contexts.append(doc_ctx)
+                    elif isinstance(raw_results, list):
+                        raw_list = raw_results
+                    else:
+                        raw_list = []
+                    for entry in raw_list:
+                        desc = str(entry.get("description") or entry.get("raw_text") or "").strip()
+                        if not desc:
+                            continue
+                        parsed_items.append({
+                            "quantity": float(entry.get("quantity", 1) or 1),
+                            "description": desc,
+                            "raw_text": desc,
+                            "source_description": desc,
+                        })
+
+            ai_ms = int((time.perf_counter() - t0) * 1000)
+            merged_context = merge_document_contexts(document_contexts)
+            synced_context_match = match_customer_job_context(
+                customer_name=merged_context.get("customer_name", ""),
+                project_name=merged_context.get("project_name", ""),
+                upload_context=upload_context,
+                branch_code=branch.code if branch else "",
+            )
+            synced_context_payload = (
+                synced_context_match.to_session_payload() if synced_context_match else {}
+            )
+            session.extracted_context_json = context_to_json(merged_context)
+            session.matched_context_json = (
+                json.dumps(synced_context_payload, sort_keys=True) if synced_context_payload else None
+            )
+            raw_text_lines = []
+            if upload_context:
+                raw_text_lines.append(f"Upload context: {upload_context}")
+            if merged_context.get("summary"):
+                raw_text_lines.append(f"Document summary: {merged_context['summary']}")
+            if merged_context.get("customer_name"):
+                raw_text_lines.append(f"Customer: {merged_context['customer_name']}")
+            if merged_context.get("project_name"):
+                raw_text_lines.append(f"Project: {merged_context['project_name']}")
+            if merged_context.get("global_material_context"):
+                raw_text_lines.append(
+                    "Global material context: " + ", ".join(merged_context["global_material_context"])
+                )
+            if merged_context.get("job_notes"):
+                raw_text_lines.append("Job notes: " + " | ".join(merged_context["job_notes"]))
+            if synced_context_payload:
+                raw_text_lines.append(
+                    "Matched cloud context: "
+                    + " / ".join(
+                        part for part in (
+                            synced_context_payload.get("customer_name"),
+                            synced_context_payload.get("project_name"),
+                        ) if part
+                    )
+                )
+                if synced_context_payload.get("material_context"):
+                    raw_text_lines.append(
+                        f"Cloud material context: {synced_context_payload['material_context']}"
+                    )
+                if synced_context_payload.get("job_notes"):
+                    raw_text_lines.append(f"Cloud job notes: {synced_context_payload['job_notes']}")
+            raw_text_lines.extend(
+                f"{item.get('quantity', 1)} "
+                f"{item.get('source_description') or item.get('raw_text') or item.get('description', '')}"
+                for item in parsed_items
+            )
+            session.raw_ocr_text = "\n".join(raw_text_lines)
+            session.status = "parsed"
+            db.session.commit()
+            logger.info("vision_parse_complete", extra={
+                "session_id": session.id, "stage": "vision_parse",
+                "duration_ms": ai_ms, "items": len(parsed_items),
+            })
+        except Exception as exc:
+            ai_ms = int((time.perf_counter() - t0) * 1000)
+            ai_parse_error = True
+            logger.exception("Parsing failed for session %d", session.id, extra={
+                "session_id": session.id, "stage": "vision_parse", "duration_ms": ai_ms,
+            })
+            session.status = "error"
+            session.error_message = f"Parsing failed: {exc}"
+            session.progress_message = None
+            db.session.commit()
+            metrics_service.save_session_metrics(
+                session_id=session.id, ai_provider=provider,
+                ocr_ms=None, ai_parse_ms=ai_ms, match_ms=None,
+                total_ms=int((time.perf_counter() - t_start) * 1000),
+                items_extracted=0, items_matched=0, items_below_threshold=0,
+                avg_confidence=None, avg_fuzzy_score=None, avg_vector_score=None,
+                ai_parse_error=True,
+            )
+            return
+        finally:
+            for _, file_path in saved_uploads:
+                try:
+                    os.unlink(file_path)
+                except OSError:
+                    pass
+
+        if not parsed_items:
+            session.status = "error"
+            session.error_message = "Parser returned no items from the uploaded material lists."
+            session.progress_message = None
+            db.session.commit()
+            metrics_service.save_session_metrics(
+                session_id=session.id, ai_provider=provider,
+                ocr_ms=None, ai_parse_ms=ai_ms, match_ms=None,
+                total_ms=int((time.perf_counter() - t_start) * 1000),
+                items_extracted=0, items_matched=0, items_below_threshold=0,
+                avg_confidence=None, avg_fuzzy_score=None, avg_vector_score=None,
+                ai_parse_error=True,
+            )
+            return
+
+        # --- Item matching ---
+        n_items = len(parsed_items)
+        _update_progress(session_id, f"Matching {n_items} item{'s' if n_items != 1 else ''} against catalog...")
+
+        erp_items = _branch_items(branch)
+        if not erp_items and session.system_id:
+            erp_items = item_matcher.get_catalog_for_system(
+                session.system_id,
+                fallback_to_global=app.config.get("BRANCH_MATCH_FALLBACK_GLOBAL", True),
+            )
+        merged_context = merge_document_contexts(document_contexts)
+        synced_context_payload = _load_json_blob(session.matched_context_json)
+        descriptions = [
+            enrich_description_for_matching(
+                item.get("match_text") or item.get("normalized_description") or item["description"],
+                upload_context=upload_context,
+                document_context={
+                    **merged_context,
+                    "global_material_context": list(
+                        dict.fromkeys(
+                            merged_context.get("global_material_context", [])
+                            + ([synced_context_payload.get("material_context")] if synced_context_payload.get("material_context") else [])
+                            + item.get("applied_context", [])
+                        )
+                    ),
+                    "job_notes": list(
+                        dict.fromkeys(
+                            merged_context.get("job_notes", [])
+                            + ([synced_context_payload.get("job_notes")] if synced_context_payload.get("job_notes") else [])
+                        )
+                    ),
+                },
+            )
+            for item in parsed_items
+        ]
+        threshold = app.config["CONFIDENCE_THRESHOLD"]
+
+        t0 = time.perf_counter()
+        if erp_items:
+            try:
+                match_results = item_matcher.match_items_batch(
+                    descriptions,
+                    erp_items,
+                    model_name=app.config["EMBEDDING_MODEL"],
+                    fuzzy_weight=app.config["FUZZY_WEIGHT"],
+                    vector_weight=app.config["VECTOR_WEIGHT"],
+                    cache_key=f"branch:{branch.id}",
+                    parsed_brands=[item.get("brand") for item in parsed_items],
+                    parsed_colors=[item.get("color") for item in parsed_items],
+                )
+            except Exception:
+                logger.exception("Item matching failed for session %d", session.id, extra={
+                    "session_id": session.id, "stage": "match",
+                })
+                match_error = True
+                match_results = [item_matcher._no_match() for _ in parsed_items]
+        else:
+            match_results = [item_matcher._no_match() for _ in parsed_items]
+        match_ms = int((time.perf_counter() - t0) * 1000)
+        total_ms = int((time.perf_counter() - t_start) * 1000)
+
+        logger.info("match_complete", extra={
+            "session_id": session.id, "stage": "match",
+            "duration_ms": match_ms, "items": len(match_results),
+        })
+
+        confidence_scores = [r["confidence_score"] for r in match_results]
+        fuzzy_scores = [r["fuzzy_score"] for r in match_results]
+        vector_scores = [r["vector_score"] for r in match_results]
+        items_matched = sum(1 for r in match_results if r["matched_item_code"])
+        items_below = sum(
+            1
+            for parsed, result in zip(parsed_items, match_results)
+            if result["confidence_score"] < threshold or parsed.get("needs_review")
+        )
+        avg_conf = sum(confidence_scores) / len(confidence_scores) if confidence_scores else None
+        avg_fuzzy = sum(fuzzy_scores) / len(fuzzy_scores) if fuzzy_scores else None
+        avg_vec = sum(vector_scores) / len(vector_scores) if vector_scores else None
+
+        for parsed, match in zip(parsed_items, match_results):
+            extracted = ExtractedItem(
+                session_id=session.id,
+                quantity=parsed["quantity"],
+                raw_description=parsed.get("source_description")
+                or parsed.get("description")
+                or parsed.get("raw_text")
+                or "",
+                parse_stage=parse_stage_label,
+                parse_line_id=parsed.get("line_id"),
+                normalized_description=parsed.get("normalized_description"),
+                section_header=parsed.get("section_header"),
+                brand=parsed.get("brand"),
+                color=parsed.get("color"),
+                product_family=parsed.get("product_family"),
+                product_type=parsed.get("product_type"),
+                ambiguity_flags=json.dumps(parsed.get("ambiguity_flags", [])),
+                review_reason=parsed.get("review_reason"),
+                matched_item_code=match["matched_item_code"],
+                matched_description=match["matched_description"],
+                confidence_score=match["confidence_score"],
+                fuzzy_score=match["fuzzy_score"],
+                vector_score=match["vector_score"],
+                candidates_json=json.dumps(match.get("candidates", [])),
+            )
+            db.session.add(extracted)
+
+        session.status = "matched"
+        session.progress_message = None
+        db.session.commit()
+
+        metrics_service.save_session_metrics(
+            session_id=session.id,
+            ai_provider=provider,
+            ocr_ms=None,
+            ai_parse_ms=ai_ms,
+            match_ms=match_ms,
+            total_ms=total_ms,
+            items_extracted=len(parsed_items),
+            items_matched=items_matched,
+            items_below_threshold=items_below,
+            avg_confidence=avg_conf,
+            avg_fuzzy_score=avg_fuzzy,
+            avg_vector_score=avg_vec,
+            match_error=match_error,
+        )
+
+        logger.info("upload_complete", extra={
+            "session_id": session.id, "stage": "upload",
+            "duration_ms": total_ms, "ai_provider": provider,
+            "items": len(parsed_items),
+        })
+
+
 @main.route("/upload", methods=["POST"])
 def upload():
     user = _current_user()
     if not user:
         if current_app.config.get("ALLOW_LOCAL_LOGIN", True):
-            flash("Please sign in to upload a list.", "warning")
-            return redirect(url_for("main.login"))
+            return jsonify({"error": "Please sign in to upload a list."}), 403
         abort(403)
 
     branch = _get_branch_for_request()
     if not branch:
-        flash("Select a branch before uploading.", "error")
-        return redirect(url_for("main.index"))
+        return jsonify({"error": "Select a branch before uploading."}), 400
 
     files = request.files.getlist("files")
     if not files:
@@ -420,13 +776,11 @@ def upload():
 
     files = [f for f in files if f and f.filename]
     if not files:
-        flash("No file selected.", "error")
-        return redirect(url_for("main.index"))
+        return jsonify({"error": "No file selected."}), 400
 
     invalid = [f.filename for f in files if not allowed_file(f.filename)]
     if invalid:
-        flash("Unsupported file type. Only images, PDFs, and CSV files are allowed.", "error")
-        return redirect(url_for("main.index"))
+        return jsonify({"error": "Unsupported file type. Only images, PDFs, and CSV files are allowed."}), 400
 
     saved_uploads: list[tuple[str, Path]] = []
     for file in files:
@@ -434,13 +788,12 @@ def upload():
             saved_uploads.append((secure_filename(file.filename), save_upload(file)))
         except Exception as exc:
             logger.exception("Failed to save uploaded file")
-            flash(f"Could not save an uploaded file: {exc}", "error")
             for _, path in saved_uploads:
                 try:
                     os.unlink(path)
                 except OSError:
                     pass
-            return redirect(url_for("main.index"))
+            return jsonify({"error": f"Could not save an uploaded file: {exc}"}), 500
 
     system_id = _resolve_system_id()
     upload_context = (request.form.get("upload_context") or "").strip()
@@ -450,342 +803,31 @@ def upload():
         file_type=first_ext if len(saved_uploads) == 1 else "batch",
         branch=branch,
         user=user,
-        status="pending",
+        status="processing",
+        progress_message="Starting...",
         system_id=system_id or branch.code,
         upload_context=upload_context or None,
     )
     db.session.add(session)
     db.session.commit()
 
-    t_start = time.perf_counter()
-    ai_ms = match_ms = None
-    ai_parse_error = match_error = False
-    provider = "openai"
+    # Launch processing in background thread
+    app = current_app._get_current_object()
+    thread = threading.Thread(
+        target=_process_session_background,
+        args=(app, session.id, saved_uploads, branch.id, upload_context, system_id),
+        daemon=True,
+    )
+    thread.start()
 
-    # --- Step 1: parse each upload ---
-    api_key = current_app.config.get("OPENAI_API_KEY", "")
-    t0 = time.perf_counter()
-    parsed_items: list[dict[str, Any]] = []
-    document_contexts: list[dict[str, Any]] = []
-    parse_stage_label = "legacy"
-    try:
-        upload_paths = [path for _, path in saved_uploads]
-        use_context_pipeline = current_app.config.get("ENABLE_CONTEXT_PIPELINE", True)
-
-        if use_context_pipeline:
-            try:
-                _, _, stage_c_lines, stage_document_context = parse_uploads(
-                    upload_paths,
-                    api_key=api_key,
-                    session_id=session.id,
-                    upload_context=upload_context,
-                )
-                parsed_items = [
-                    {
-                        "line_id": line.line_id,
-                        "quantity": line.quantity,
-                        "description": line.raw_text,
-                        "raw_text": line.raw_text,
-                        "source_description": line.raw_text,
-                        "applied_context": [value for value in (line.section_header,) if value],
-                        "normalized_description": line.normalized_description,
-                        "section_header": line.section_header,
-                        "brand": line.brand,
-                        "color": line.color,
-                        "product_family": line.product_family,
-                        "product_type": line.product_type,
-                        "ambiguity_flags": line.ambiguity_flags,
-                        "review_reason": line.review_reason,
-                        "needs_review": line.needs_review,
-                        "match_text": line.match_text,
-                    }
-                    for line in stage_c_lines
-                ]
-                parse_stage_label = "context_stage_c"
-                if stage_document_context:
-                    document_contexts.append(stage_document_context)
-            except Exception:
-                if not current_app.config.get("CONTEXT_PIPELINE_FALLBACK_TO_LEGACY", True):
-                    raise
-                logger.exception(
-                    "Context pipeline failed; falling back to legacy single-pass parsing"
-                )
-
-        if not parsed_items:
-            csv_uploads = []
-            visual_uploads = []
-            for _, file_path in saved_uploads:
-                ext = file_path.suffix.lstrip(".").lower()
-                if ext == "csv":
-                    csv_uploads.append(file_path)
-                else:
-                    visual_uploads.append(file_path)
-
-            for file_path in csv_uploads:
-                parsed_items.extend(parse_csv_items(file_path))
-
-            if visual_uploads:
-                if not api_key:
-                    raise RuntimeError("OPENAI_API_KEY is not configured for image/pdf parsing.")
-
-                vision_payload = _vision_extract_documents(
-                    visual_uploads,
-                    api_key=api_key,
-                    model=current_app.config["OPENAI_MODEL"],
-                    upload_context=upload_context,
-                )
-                parsed_items.extend(vision_payload["items"])
-                document_contexts.append(vision_payload["document_context"])
-        elif api_key and not document_contexts:
-            visual_uploads = [
-                file_path
-                for _, file_path in saved_uploads
-                if file_path.suffix.lstrip(".").lower() != "csv"
-            ]
-            if visual_uploads:
-                try:
-                    vision_payload = _vision_extract_documents(
-                        visual_uploads,
-                        api_key=api_key,
-                        model=current_app.config["OPENAI_MODEL"],
-                        upload_context=upload_context,
-                    )
-                    document_contexts.append(vision_payload["document_context"])
-                except Exception:
-                    logger.warning(
-                        "Document context extraction failed for uploaded batch",
-                        exc_info=True,
-                    )
-
-        ai_ms = int((time.perf_counter() - t0) * 1000)
-        merged_context = merge_document_contexts(document_contexts)
-        synced_context_match = match_customer_job_context(
-            customer_name=merged_context.get("customer_name", ""),
-            project_name=merged_context.get("project_name", ""),
-            upload_context=upload_context,
-            branch_code=branch.code if branch else "",
-        )
-        synced_context_payload = (
-            synced_context_match.to_session_payload() if synced_context_match else {}
-        )
-        session.extracted_context_json = context_to_json(merged_context)
-        session.matched_context_json = (
-            json.dumps(synced_context_payload, sort_keys=True) if synced_context_payload else None
-        )
-        raw_text_lines = []
-        if upload_context:
-            raw_text_lines.append(f"Upload context: {upload_context}")
-        if merged_context.get("summary"):
-            raw_text_lines.append(f"Document summary: {merged_context['summary']}")
-        if merged_context.get("customer_name"):
-            raw_text_lines.append(f"Customer: {merged_context['customer_name']}")
-        if merged_context.get("project_name"):
-            raw_text_lines.append(f"Project: {merged_context['project_name']}")
-        if merged_context.get("global_material_context"):
-            raw_text_lines.append(
-                "Global material context: " + ", ".join(merged_context["global_material_context"])
-            )
-        if merged_context.get("job_notes"):
-            raw_text_lines.append("Job notes: " + " | ".join(merged_context["job_notes"]))
-        if synced_context_payload:
-            raw_text_lines.append(
-                "Matched cloud context: "
-                + " / ".join(
-                    part for part in (
-                        synced_context_payload.get("customer_name"),
-                        synced_context_payload.get("project_name"),
-                    ) if part
-                )
-            )
-            if synced_context_payload.get("material_context"):
-                raw_text_lines.append(
-                    f"Cloud material context: {synced_context_payload['material_context']}"
-                )
-            if synced_context_payload.get("job_notes"):
-                raw_text_lines.append(f"Cloud job notes: {synced_context_payload['job_notes']}")
-        raw_text_lines.extend(
-            f"{item.get('quantity', 1)} "
-            f"{item.get('source_description') or item.get('raw_text') or item.get('description', '')}"
-            for item in parsed_items
-        )
-        session.raw_ocr_text = "\n".join(raw_text_lines)
-        session.status = "parsed"
-        db.session.commit()
-        logger.info("vision_parse_complete", extra={
-            "session_id": session.id, "stage": "vision_parse",
-            "duration_ms": ai_ms, "items": len(parsed_items),
-        })
-    except Exception as exc:
-        ai_ms = int((time.perf_counter() - t0) * 1000)
-        ai_parse_error = True
-        logger.exception("Parsing failed for session %d", session.id, extra={
-            "session_id": session.id, "stage": "vision_parse", "duration_ms": ai_ms,
-        })
-        session.status = "error"
-        session.error_message = f"Parsing failed: {exc}"
-        db.session.commit()
-        metrics_service.save_session_metrics(
-            session_id=session.id, ai_provider=provider,
-            ocr_ms=None, ai_parse_ms=ai_ms, match_ms=None,
-            total_ms=int((time.perf_counter() - t_start) * 1000),
-            items_extracted=0, items_matched=0, items_below_threshold=0,
-            avg_confidence=None, avg_fuzzy_score=None, avg_vector_score=None,
-            ai_parse_error=True,
-        )
-        flash(f"Could not parse the upload(s): {exc}", "error")
-        return redirect(url_for("main.index"))
-    finally:
-        for _, file_path in saved_uploads:
-            try:
-                os.unlink(file_path)
-            except OSError:
-                pass
-
-    if not parsed_items:
-        session.status = "error"
-        session.error_message = "Parser returned no items from the uploaded material lists."
-        db.session.commit()
-        metrics_service.save_session_metrics(
-            session_id=session.id, ai_provider=provider,
-            ocr_ms=None, ai_parse_ms=ai_ms, match_ms=None,
-            total_ms=int((time.perf_counter() - t_start) * 1000),
-            items_extracted=0, items_matched=0, items_below_threshold=0,
-            avg_confidence=None, avg_fuzzy_score=None, avg_vector_score=None,
-            ai_parse_error=True,
-        )
-        flash("No items could be extracted from the uploaded material list(s).", "warning")
-        return redirect(url_for("main.index"))
-
-    # --- Step 3: Item matching ---
-    erp_items = _branch_items(branch)
-    if not erp_items and session.system_id:
-        erp_items = item_matcher.get_catalog_for_system(
-            session.system_id,
-            fallback_to_global=current_app.config.get("BRANCH_MATCH_FALLBACK_GLOBAL", True),
-        )
-    merged_context = merge_document_contexts(document_contexts)
-    synced_context_payload = _load_json_blob(session.matched_context_json)
-    descriptions = [
-        enrich_description_for_matching(
-            item.get("match_text") or item.get("normalized_description") or item["description"],
-            upload_context=upload_context,
-            document_context={
-                **merged_context,
-                "global_material_context": list(
-                    dict.fromkeys(
-                        merged_context.get("global_material_context", [])
-                        + ([synced_context_payload.get("material_context")] if synced_context_payload.get("material_context") else [])
-                        + item.get("applied_context", [])
-                    )
-                ),
-                "job_notes": list(
-                    dict.fromkeys(
-                        merged_context.get("job_notes", [])
-                        + ([synced_context_payload.get("job_notes")] if synced_context_payload.get("job_notes") else [])
-                    )
-                ),
-            },
-        )
-        for item in parsed_items
-    ]
-    threshold = current_app.config["CONFIDENCE_THRESHOLD"]
-
-    t0 = time.perf_counter()
-    if erp_items:
-        try:
-            match_results = item_matcher.match_items_batch(
-                descriptions,
-                erp_items,
-                model_name=current_app.config["EMBEDDING_MODEL"],
-                fuzzy_weight=current_app.config["FUZZY_WEIGHT"],
-                vector_weight=current_app.config["VECTOR_WEIGHT"],
-                cache_key=f"branch:{branch.id}",
-                parsed_brands=[item.get("brand") for item in parsed_items],
-                parsed_colors=[item.get("color") for item in parsed_items],
-            )
-        except Exception:
-            logger.exception("Item matching failed for session %d", session.id, extra={
-                "session_id": session.id, "stage": "match",
-            })
-            match_error = True
-            match_results = [item_matcher._no_match() for _ in parsed_items]
-    else:
-        match_results = [item_matcher._no_match() for _ in parsed_items]
-    match_ms = int((time.perf_counter() - t0) * 1000)
-    total_ms = int((time.perf_counter() - t_start) * 1000)
-
-    logger.info("match_complete", extra={
-        "session_id": session.id, "stage": "match",
-        "duration_ms": match_ms, "items": len(match_results),
+    return jsonify({
+        "session_id": session.id,
+        "status_url": url_for("main.session_status", session_id=session.id),
     })
 
-    confidence_scores = [r["confidence_score"] for r in match_results]
-    fuzzy_scores = [r["fuzzy_score"] for r in match_results]
-    vector_scores = [r["vector_score"] for r in match_results]
-    items_matched = sum(1 for r in match_results if r["matched_item_code"])
-    items_below = sum(
-        1
-        for parsed, result in zip(parsed_items, match_results)
-        if result["confidence_score"] < threshold or parsed.get("needs_review")
-    )
-    avg_conf = sum(confidence_scores) / len(confidence_scores) if confidence_scores else None
-    avg_fuzzy = sum(fuzzy_scores) / len(fuzzy_scores) if fuzzy_scores else None
-    avg_vec = sum(vector_scores) / len(vector_scores) if vector_scores else None
 
-    for parsed, match in zip(parsed_items, match_results):
-        extracted = ExtractedItem(
-            session_id=session.id,
-            quantity=parsed["quantity"],
-            raw_description=parsed.get("source_description")
-            or parsed.get("description")
-            or parsed.get("raw_text")
-            or "",
-            parse_stage=parse_stage_label,
-            parse_line_id=parsed.get("line_id"),
-            normalized_description=parsed.get("normalized_description"),
-            section_header=parsed.get("section_header"),
-            brand=parsed.get("brand"),
-            color=parsed.get("color"),
-            product_family=parsed.get("product_family"),
-            product_type=parsed.get("product_type"),
-            ambiguity_flags=json.dumps(parsed.get("ambiguity_flags", [])),
-            review_reason=parsed.get("review_reason"),
-            matched_item_code=match["matched_item_code"],
-            matched_description=match["matched_description"],
-            confidence_score=match["confidence_score"],
-            fuzzy_score=match["fuzzy_score"],
-            vector_score=match["vector_score"],
-            candidates_json=json.dumps(match.get("candidates", [])),
-        )
-        db.session.add(extracted)
-
-    session.status = "matched"
-    db.session.commit()
-
-    metrics_service.save_session_metrics(
-        session_id=session.id,
-        ai_provider=provider,
-        ocr_ms=None,
-        ai_parse_ms=ai_ms,
-        match_ms=match_ms,
-        total_ms=total_ms,
-        items_extracted=len(parsed_items),
-        items_matched=items_matched,
-        items_below_threshold=items_below,
-        avg_confidence=avg_conf,
-        avg_fuzzy_score=avg_fuzzy,
-        avg_vector_score=avg_vec,
-        match_error=match_error,
-    )
-
-    logger.info("upload_complete", extra={
-        "session_id": session.id, "stage": "upload",
-        "duration_ms": total_ms, "ai_provider": provider,
-        "items": len(parsed_items),
-    })
-
-    return redirect(url_for("main.review", session_id=session.id))
-
+if False:  # noqa — dead code anchor, original upload logic moved to _process_session_background()
+    pass  # fmt: skip
 
 # ---------------------------------------------------------------------------
 # Review Screen

@@ -74,6 +74,15 @@
   </form>
 </div>
 
+<div id="processing-card" class="card processing-card hidden">
+  <div class="processing-content">
+    <div class="processing-spinner-lg"></div>
+    <p id="processing-message" class="processing-message">Processing your material list&hellip;</p>
+    <p id="processing-error" class="processing-error hidden"></p>
+    <p class="processing-hint">You can close this page &mdash; processing continues in the background. Check back in the sessions table below.</p>
+  </div>
+</div>
+
 {% if sessions %}
 <div class="card">
   <h2 class="section-title">Recent Sessions</h2>
@@ -98,7 +107,11 @@
         <td>{{ s.item_count }}</td>
         <td class="col-date">{{ s.created_at.strftime('%b %d, %Y %H:%M') }}</td>
         <td>
-          {% if s.status not in ('pending', 'error') %}
+          {% if s.status == 'processing' %}
+            <span class="badge badge-processing">
+              <span class="spinner-inline"></span> processing
+            </span>
+          {% elif s.status not in ('pending', 'error') %}
             <a class="btn btn-sm btn-secondary" href="{{ url_for('main.review', session_id=s.id) }}">Review</a>
           {% endif %}
           {% if s.error_message %}
