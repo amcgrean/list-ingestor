@@ -46,6 +46,7 @@ _ABBREVIATIONS = {
     r"\bpvc\b": "PVC",
     r"\bhdg\b": "hot dip galvanized",
     r"\bglu-?lam\b": "glulam",
+    r"\bjoists?\b": "lumber joist",  # "2x10 joists" → "2x10 lumber joist" so vector sees lumber
     r"\bss\b": "stainless steel",
     r"\bea\b": "each",
     # Siding / engineered wood brands
