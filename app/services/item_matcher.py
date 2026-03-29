@@ -45,6 +45,7 @@ _ABBREVIATIONS = {
     r"\blus\b": "Simpson LUS joist hanger",
     r"\bpvc\b": "PVC",
     r"\bhdg\b": "hot dip galvanized",
+    r"\bglu-?lam\b": "glulam",
     r"\bss\b": "stainless steel",
     r"\bea\b": "each",
     # Siding / engineered wood brands
@@ -376,6 +377,51 @@ _COLOR_TO_BRAND: dict[str, str] = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Finish / material conflict penalty
+# ---------------------------------------------------------------------------
+# Mutually-exclusive metal finish groups.  If the query specifies a finish
+# from one group and the catalog item's searchable text contains a finish from
+# a *different* group, subtract this penalty so the wrong-finish item sinks in
+# the ranking (e.g. query "bronze screws" should not match "stainless screws").
+_FINISH_CONFLICT_GROUPS: list[frozenset[str]] = [
+    frozenset({"bronze"}),
+    frozenset({"stainless", "stainless steel"}),
+    frozenset({"galvanized", "galv", "hot dip galvanized"}),
+]
+_FINISH_CONFLICT_PENALTY = -0.15
+
+
+def _finish_conflict_penalty(query_norm: str, catalog_searchable: str) -> float:
+    """Return _FINISH_CONFLICT_PENALTY if query and catalog specify different metal finishes."""
+    cat = catalog_searchable.lower()
+    for i, group in enumerate(_FINISH_CONFLICT_GROUPS):
+        if any(kw in query_norm for kw in group):
+            for j, other in enumerate(_FINISH_CONFLICT_GROUPS):
+                if i != j and any(kw in cat for kw in other):
+                    return _FINISH_CONFLICT_PENALTY
+    return 0.0
+
+
+# ---------------------------------------------------------------------------
+# Dimension-in-text match bonus
+# ---------------------------------------------------------------------------
+# When a fractional dimension (e.g. "3-1/8", "1-1/2", "3/4") appears in the
+# *query*, give a +0.06 bonus if that exact string also appears in the catalog
+# item description/searchable text.  This prevents cases like "3-1/8" screw"
+# matching "1-1/2" screw" just because the vector similarity for both is high.
+_DIM_RE = re.compile(r'\b(\d+[-\u2013]\d+/\d+|\d+/\d+)\b')
+
+
+def _dimension_text_bonus(query_norm: str, catalog_searchable: str) -> float:
+    """Return +0.06 if a fractional dimension from the query appears in catalog text."""
+    dims = _DIM_RE.findall(query_norm)
+    if not dims:
+        return 0.0
+    cat = catalog_searchable.lower()
+    return 0.06 if any(d in cat for d in dims) else 0.0
+
+
 def _brand_match_bonus(parsed_brand: str | None, catalog_item: ERPItem) -> float:
     """Score bonus/penalty when the parsed brand matches or conflicts with catalog."""
     if not parsed_brand:
@@ -495,6 +541,8 @@ def match_item_candidates(
             final_score += 0.08
         final_score += _brand_match_bonus(parsed_brand, item)
         final_score += _color_match_bonus(parsed_color, item)
+        final_score += _finish_conflict_penalty(norm_desc, item.searchable_text or "")
+        final_score += _dimension_text_bonus(norm_desc, item.searchable_text or "")
 
         candidates.append({
             "sku": item.sku,
@@ -603,6 +651,8 @@ def match_items_batch(
                     final_score += 0.08
                 final_score += _brand_match_bonus(brand, item)
                 final_score += _color_match_bonus(color, item)
+                final_score += _finish_conflict_penalty(norm_desc, item.searchable_text or "")
+                final_score += _dimension_text_bonus(norm_desc, item.searchable_text or "")
 
                 candidates.append({
                     "sku": item.sku,
@@ -670,6 +720,8 @@ def _fuzzy_only_candidates(
             final_score += 0.08
         final_score += _brand_match_bonus(parsed_brand, item)
         final_score += _color_match_bonus(parsed_color, item)
+        final_score += _finish_conflict_penalty(norm_desc, item.searchable_text or "")
+        final_score += _dimension_text_bonus(norm_desc, item.searchable_text or "")
         scored.append({
             "sku": item.sku,
             "description": item.description,
