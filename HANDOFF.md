@@ -1,222 +1,161 @@
-# Agent Handoff: Learning Pipeline
+# Agent Handoff: Contractor Language Processing & Match Optimization
 
-## What Was Just Shipped (commit 32cf099)
+## What Was Just Shipped
 
-Brand/color scoring was completely dead — `parsed_brands`/`parsed_colors` were never passed to `match_items_batch()` in either the process or reprocess routes. Fixed. Also: 55 color-to-brand mappings, 79 SKU abbreviation expansions, section header flowing into match_text, reprocess using enriched descriptions, color column on ERPItem, mobile UX fixes.
+### Commit 762f3c2 — Industry synonym/abbreviation expansion
+Comprehensive pass adding ~30 new abbreviation expansions to `_ABBREVIATIONS` in `app/services/item_matcher.py`:
+- **Structural member terms**: joists, rafters, stringers, sleepers, blocking, furring, ledger, mudsill, sill plate, rim joist/board → all inject "lumber" signal so vector encoder distinguishes dimensional lumber from hardware sharing the same name
+- **Engineered wood**: i-joist→TJI, LSL→timberstrand, PSL→parallam, microllam→LVL
+- **Hardware trade synonyms**: lag bolts→lag screw, through bolts→carriage bolt, spindles→baluster, structural screws→GRK RSS, deck boards→decking, deck screws→exterior fastener, hidden fasteners→camo
+- **Species/treatment**: DFL, hem-fir, ACQ, ground contact, above ground
+- **Dimension regex**: Extended `_DIM_RE` to match NxN patterns (6x6, 2x10, 4x4) for the +0.06 text bonus
+- **Pattern ordering fix**: i-joist and rim joist patterns run before generic joists? to prevent premature matching
 
-## Post-Deploy Tasks (run on Pi after `docker-compose up --build`)
+### Commit 472970a (prior session) — Section header context fix
+- Strengthened Stage A vision prompt with explicit section header handling instructions + concrete example
+- Added fallback: `_extract_categories_from_summary()` populates `global_material_context` from document summary when lines lack section headers
 
-1. `docker exec -it <container> python scripts/rebuild_ai_match.py` — regenerates ai_match_text + color for all catalog items
-2. `curl -X POST http://localhost:8000/admin/clean-nan-brands -H 'Cookie: <admin_session>'` — cleans "nan" brand strings from DB
+### Both deployed to Pi (agility-ai)
 
 ---
 
-## The Problem
+## The Core Problem: Contractor ↔ Catalog Vocabulary Gap
 
-Every user correction is a labeled training example: "this raw text maps to this SKU." The system captures corrections (MatchFeedbackEvent, ItemAlias) but uses them weakly:
+Contractors write material lists in trade language. The ERP catalog describes the same items by grade/species/dimensions. The vector model (`all-MiniLM-L6-v2`) matches on semantic similarity, but when two domains use different words for the same thing, similarity scores break down.
 
-- **ItemAlias** is exact-match only — "Cinn Cove 1x6 16" gets no benefit from a correction on "Cinnamon Cove 1x6 16ft"
-- **Feedback rerank** is capped at +0.2 boost and only matches on exact `normalized_description`
-- **No re-parse** — uploaded files are deleted after parsing, so bad OCR/LLM parse errors can't be fixed
-- **No field-level corrections** — users can fix the matched SKU but not brand/color/section_header
-- **No customer-specific learning** — one customer's "CC" (Cinnamon Cove) overwrites another's "CC" (cedar closet)
+**Examples from real sessions:**
+| Contractor writes | Catalog says | Problem |
+|---|---|---|
+| "2x10 joists" | "2x10-16' #1 SYP Treated-Ground Contact" | "joist" only in hardware descriptions (joist hanger nail), not lumber |
+| "6x6 posts" | "6x6-08' SYP S4S Treated-In Ground" | "post" only in hardware (post anchor, post cap) |
+| "lag bolts" | "Hex Lag Screw HDG" | Synonym mismatch |
+| "spindles" | "Balusters" | Regional/trade term variation |
+| "3-1/8 bronze screws" | "9x3-1/8" Bronze Star Screw-Bulk" | Correct item exists but wrong size matched |
+| "treated 9" beam glu 16'" | "3-1/2"x9-1/2"--R/L Treated Glu-Lam Beam" | Matched T&G board instead of glulam |
 
-## Architecture Overview
+The abbreviation expansion partially solves this by injecting bridge words. But there are deeper issues to explore.
 
+---
+
+## Directions to Explore
+
+### 1. Material/Finish Discrimination (HIGH IMPACT)
+
+Session 25 items 468-469: "2-1/2" screws Bronze" matched **stainless steel** screws. The correct bronze screws exist (`scrbrzstr2151lb`). The vector model sees "2-1/2 screw" and ranks all 2-1/2" screws similarly regardless of material.
+
+**Ideas:**
+- **Negative signal / penalty**: Extract material keywords from query (bronze, stainless, galvanized, aluminum, copper). If query says "bronze" and candidate says "stainless", apply a penalty factor (e.g., -0.15 to confidence).
+- **Material keyword sets**: Build a dict of mutually-exclusive material groups:
+  ```python
+  _MATERIAL_GROUPS = {
+      "bronze": {"bronze", "brz"},
+      "stainless": {"stainless", "ss", "stainless steel"},
+      "galvanized": {"galvanized", "hdg", "hot dip galvanized", "galv"},
+      "aluminum": {"aluminum", "aluminium", "alum"},
+      "copper": {"copper"},
+  }
+  ```
+  If query's material group ≠ candidate's material group → penalty. If they match → bonus.
+- **Same approach for wood species**: treated vs fir vs cedar vs SPF — if query says "treated" and catalog says "Fir", penalize.
+
+### 2. Contextual Expansion Based on Document Type (MEDIUM IMPACT)
+
+Session 25 had zero `upload_context` — the system had no idea this was a deck project. When context IS available ("deck project", "interior framing", "siding job"), the expansion should change:
+- "joists" on a deck → treated SYP, "joists" on interior → fir/SPF
+- "posts" on a deck → treated 4x4/6x6, "posts" on a fence → treated 4x4
+
+**Ideas:**
+- **Context-aware abbreviation expansion**: Instead of static `_ABBREVIATIONS`, have a function that takes `upload_context` and returns a modified abbreviation dict. E.g., if context contains "deck":
+  ```python
+  r"\bjoists?\b": "lumber joist treated SYP",
+  r"\bposts?\b": "lumber post treated SYP",
+  ```
+  If context contains "framing" or "interior":
+  ```python
+  r"\bjoists?\b": "lumber joist fir SPF",
+  r"\bstuds?\b": "lumber stud fir SPF",
+  ```
+- **Prompt the upload form to require context**: Make "Project Type" (deck, framing, siding, trim, etc.) a required dropdown on upload. This becomes the strongest signal for disambiguation.
+
+### 3. Catalog-Side Enrichment (MEDIUM IMPACT)
+
+The catalog descriptions are bare: "2x10-16' #1 SYP Treated-Ground Contact" doesn't mention "joist", "rafter", "rim board", or any usage term. We can bulk-enrich `keywords` or `ai_match_text` to include common usage terms:
+
+**Ideas:**
+- **Rule-based keyword injection into catalog items:**
+  ```python
+  # For all 2x8, 2x10, 2x12 treated items, add:
+  "joist rafter header rim board deck framing structural"
+  # For all 4x4, 6x6 treated items, add:
+  "post column support pier deck"
+  # For all 2x4, 2x6 items (fir/SPF), add:
+  "stud framing wall plate"
+  # For all 5/4x6 decking items, add:
+  "deck board decking surface"
+  ```
+- **Run as a one-time migration script** (`scripts/enrich_catalog_keywords.py`) that parses the item_code and description to determine size/species, then appends usage keywords.
+- **Then rebuild ai_match_text** with `rebuild_ai_match.py`.
+- This is the **dual-side** approach: expand contractor queries AND enrich catalog descriptions, so the vector space has overlap from both directions.
+
+### 4. OCR Error Recovery (LOW-MEDIUM IMPACT)
+
+Session 25 item 464: "1os 210 hangers (50)" — OCR read "LUS" as "1os". The normalized description became "210 Hangers" which lost the brand prefix entirely.
+
+**Ideas:**
+- **Common OCR substitution table**: `1` ↔ `l` ↔ `I`, `0` ↔ `O`, `5` ↔ `S`, etc. When a token doesn't match any known abbreviation, try character substitutions and re-check.
+- **Hardware model prefix detection**: If token before a number looks like a garbled Simpson model prefix (LUS, LU, HU, MIU, LSU, etc.), try the closest valid prefix.
+- **Levenshtein pre-filter on abbreviations**: Before matching, check if any unknown token is within edit-distance 1 of a known abbreviation key.
+
+### 5. Size/Dimension Weighting (MEDIUM IMPACT)
+
+Session 25 item 469: "3-1/8" screws Bronze" matched "9x1-1/2" Bronze Star Screw-Bulk" instead of "9x3-1/8" Bronze Star Screw-Bulk". Both are bronze, but the size is wrong.
+
+The `_dimension_text_bonus` (+0.06) exists but may not be strong enough, and it only fires when the exact dimension string appears. "3-1/8" would need to appear literally in the candidate text.
+
+**Ideas:**
+- **Increase dimension bonus from 0.06 to 0.10-0.12** — dimensions are often the single most important discriminator for hardware.
+- **Add a dimension MISMATCH penalty**: If query has dimension "3-1/8" and candidate has a different dimension "1-1/2", apply -0.08. This pushes wrong-size items down.
+- **Parse dimensions into numeric values for proximity scoring**: Convert "3-1/8" → 3.125, "1-1/2" → 1.5, "2-1/2" → 2.5. Then score by how close the numeric values are.
+
+---
+
+## Session 25 Full Diagnosis (for reference)
+
+| ID | Raw | Matched | Score | Problem |
+|----|-----|---------|-------|---------|
+| 462 | 2 6x6 + Posts | RDI Elevations Mid-Post 2x4-36" | 0.52 | "post" matched hardware, not 6x6 treated lumber. Catalog HAS 6x6 treated. |
+| 463 | 2x10 Joists 25 | 10dx1 1/2" HDG Joist Hanger Nail | 0.36 | "joist" pulled toward hardware. Catalog HAS 2x10 treated. |
+| 464 | 1os 210 hangers (50) | TUS24 Mitek Undersaddle Hanger | 0.39 | OCR: "1os" = "LUS". LUS210 NOT in catalog (gap). |
+| 465 | treated 9" Beam Glu 16' | 2x8-16' T&G #1 SYP .40 Treated | 0.51 | Glulam beam IS in catalog (`9treglulam35`). Match failed on description format. |
+| 466 | 100 trex 16' decking, trowel sand | Trex Enhance 5/4x6-16' GRV Toasted-Sand | 0.66 | "Trowel Sand" not in catalog. Closest is "Toasted Sand". Likely customer error or catalog gap. |
+| 467 | Decking Clips | Ninja Hidden Deck Clip 50-Sq | 0.68 | Reasonable match. |
+| 468 | 2-1/2" screws Bronze etc | 9x2-1/2" Stainless Steel Star Screw-lb | 0.57 | **Correct item exists** (`scrbrzstr2151lb`). Stainless outscored bronze — material discrimination failure. |
+| 469 | 3-1/8" screws Bronze * | 9x1-1/2" Bronze Star Screw-Bulk | 0.56 | **Correct item exists** (`scrbrzstr318`). Wrong size — dimension weighting too weak. |
+
+---
+
+## Remaining Backlog (from prior sessions)
+
+| Pri | Item | Status |
+|-----|------|--------|
+| 🟡 P2 | Add color column to DB and re-import from catalog | Pending |
+| 🟠 P3 | Metrics page mobile table (14 columns) | Pending |
+| 🟠 P3 | Catalog page mobile form | Pending |
+| 🟠 P3 | Async upload UX (browser timeout on mobile — needs progress polling instead of sync wait) | Pending |
+| 🟢 P4 | Proactive vector index rebuild after catalog upload | Pending |
+| 🟢 P4 | Move `rebuild_ai_match.py` into `scripts/` | Pending |
+
+## Key Files
+
+- `app/services/item_matcher.py` — `_ABBREVIATIONS` dict, `_DIM_RE`, `match_items_batch()`, `_dimension_text_bonus()`, `_COLOR_TO_BRAND`
+- `app/services/vision_extract_service.py` — Stage A prompt, `_extract_categories_from_summary()`, `_extract_document_payload()`
+- `app/services/upload_context.py` — `enrich_description_for_matching()`, `normalize_document_context()`
+- `app/services/context_interpreter.py` — Stage B context resolution
+- `app/services/parse_pipeline.py` — Stage C match preparation
+- `app/routes.py` — process/reprocess/save endpoints
+
+## DB Access
+
+```bash
+ssh agility-ai "cd /home/amcgrean/services/list-ingestor && docker compose exec -T db psql -U erp -d erp -c \"YOUR SQL HERE\""
 ```
-Upload → Stage A (VisionExtractService) → Stage B (ContextInterpreter) → Stage C (parse_pipeline)
-  → match_items_batch (item_matcher) → Review page → Save (creates MatchFeedbackEvent + ItemAlias)
-  → Reprocess (re-runs matching only, reads back feedback via _feedback_counts_batch)
-```
-
-Key files:
-- `app/services/vision_extract_service.py` — Stage A: OCR/LLM extraction
-- `app/services/context_interpreter.py` — Stage B: LLM context resolution (section headers, brand/color)
-- `app/services/parse_pipeline.py` — Stage C: prepare MatchReadyLine with match_text
-- `app/services/item_matcher.py` — Matching: vector + fuzzy + brand/color bonuses + feedback rerank
-- `app/routes.py` — HTTP endpoints for process, reprocess, save, feedback-workflow
-- `app/models.py` — ERPItem, ExtractedItem, ItemAlias, MatchFeedbackEvent, etc.
-
----
-
-## 5 Gaps to Fix (in priority order)
-
-### Gap 1: Re-Parse Option (HIGH priority, MEDIUM effort)
-
-**Problem:** Reprocess only re-runs matching. If OCR/LLM parse was bad (wrong quantity, missed header, wrong brand), can't fix it. Files deleted after parsing (`routes.py` ~line 640).
-
-**Implementation:**
-
-1. **Save uploaded files permanently:**
-   - In the upload processing route (`routes.py`, around line 440-460), after saving temp files, copy them to `uploads/sessions/{session_id}/`
-   - Store the file paths list in a new `ProcessingSession.uploaded_files_json` column (JSON array of filenames)
-   - Do NOT delete originals after parsing
-
-2. **New endpoint `POST /review/<session_id>/reparse`:**
-   ```python
-   @main.route("/review/<int:session_id>/reparse", methods=["POST"])
-   def reparse_session(session_id):
-       session = ProcessingSession.query.get_or_404(session_id)
-       # Load saved files from uploads/sessions/{session_id}/
-       file_paths = [Path(f) for f in json.loads(session.uploaded_files_json or "[]")]
-
-       # Build enriched upload_context from:
-       # - Original upload_context
-       # - Session comment (user feedback)
-       # - Summary of corrections made so far
-       corrections = MatchFeedbackEvent.query.filter_by(
-           session_id=session_id, was_corrected=True
-       ).all()
-       correction_summary = "; ".join(
-           f'"{c.raw_description}" should be {c.final_sku}'
-           for c in corrections[:20]  # cap to avoid prompt overflow
-       )
-       upload_ctx = f"{session.upload_context or ''} User corrections: {correction_summary}".strip()
-
-       # Re-run full pipeline (A/B/C + matching)
-       _, _, stage_c_lines, doc_context = parse_uploads(file_paths, api_key, session.id, upload_ctx)
-       # ... rebuild parsed_items, run match_items_batch with parsed_brands/parsed_colors
-       # ... update ExtractedItem rows, preserve user-confirmed items
-   ```
-
-3. **UI:** Add "Re-Parse" button next to "Reprocess" in `review.html`/`review.js`
-
-4. **Files to modify:** `models.py` (add `uploaded_files_json` to ProcessingSession), `routes.py` (file save + new endpoint), `review.html`/`review.js` (button)
-
----
-
-### Gap 2: Per-Field Parse Corrections (HIGH priority, MEDIUM effort)
-
-**Problem:** Users can only correct the matched SKU. Brand, color, section_header, product_family are frozen after Stage B. No way to say "this was Trex, not TimberTech."
-
-**Implementation:**
-
-1. **New model `ParseCorrectionEvent`:**
-   ```python
-   class ParseCorrectionEvent(db.Model):
-       __tablename__ = "parse_correction_events"
-       id = db.Column(db.Integer, primary_key=True)
-       session_id = db.Column(db.Integer, db.ForeignKey("processing_sessions.id"), nullable=False, index=True)
-       extracted_item_id = db.Column(db.Integer, db.ForeignKey("extracted_items.id"), nullable=False)
-       field_name = db.Column(db.String(50), nullable=False)  # brand, color, section_header, product_family
-       original_value = db.Column(db.String(255), default="")
-       corrected_value = db.Column(db.String(255), default="")
-       created_at = db.Column(db.DateTime, default=datetime.utcnow)
-   ```
-
-2. **Make fields editable in review UI:**
-   - Add small edit icons next to brand/color/section_header/product_family display
-   - On click, turn into inline text input
-   - Collect corrections in the same save payload
-   - In `save_review()`, update `ExtractedItem.brand`, `.color`, etc. and create `ParseCorrectionEvent`
-
-3. **Feed corrections into reparse:**
-   - When reparse runs, load all `ParseCorrectionEvent` rows for the session
-   - After Stage B interpretation, override specific item fields with user corrections
-   - This ensures the user's knowledge persists across re-parses
-
-4. **Files to modify:** `models.py`, `routes.py` (save_review), `review.html`, `review.js`, `__init__.py` (add to _sync_table_columns)
-
----
-
-### Gap 3: Fuzzy Alias Matching (HIGH priority, MEDIUM effort)
-
-**Problem:** ItemAlias lookup is exact on `normalise_description(raw_text)`. No cross-description generalization.
-
-**Implementation:**
-
-1. **Embedding-based alias index:**
-   - New class `AliasIndex` in `item_matcher.py` (similar to VectorIndex but for aliases)
-   - When an alias is created/updated in `save_review()`, also encode it with sentence-transformers
-   - Store embedding in a new `ItemAlias.embedding` column (JSON text, same pattern as ERPItem._embedding)
-   - Build a small FAISS index of all alias embeddings (much smaller than catalog — hundreds not thousands)
-
-2. **Fallback lookup flow:**
-   ```python
-   def _alias_lookup_batch(descriptions):
-       # Step 1: exact match (existing)
-       exact = {norm: sku for norm, sku in exact_query}
-
-       # Step 2: for unresolved, try embedding similarity
-       unresolved = [d for d in descriptions if normalise_description(d) not in exact]
-       if unresolved and alias_index:
-           for desc in unresolved:
-               hits = alias_index.search(desc, k=1)
-               if hits and hits[0].score > 0.92:
-                   exact[normalise_description(desc)] = hits[0].sku
-                   # Return with confidence 0.95, not 1.0
-       return exact
-   ```
-
-3. **Alias usage_count as confidence multiplier:**
-   - In `match_item_candidates` and `match_items_batch`, when alias resolves:
-     - count >= 3: confidence 1.0 (well-established)
-     - count == 2: confidence 0.95
-     - count == 1: confidence 0.90 (single correction, might be wrong)
-   - Prevents one bad correction from cementing forever
-
-4. **Files to modify:** `models.py` (ItemAlias.embedding), `item_matcher.py` (AliasIndex class, modified lookup functions), `routes.py` (encode alias on save)
-
----
-
-### Gap 4: Correction Pattern Mining (MEDIUM priority, LOW effort)
-
-**Problem:** Users keep making the same type of correction but the system doesn't learn abbreviation patterns from them.
-
-**Implementation:**
-
-1. **New script `scripts/mine_correction_patterns.py`:**
-   ```python
-   # 1. Query MatchFeedbackEvent WHERE was_corrected=True
-   # 2. For each correction, tokenize raw_description and final SKU's catalog description
-   # 3. Find tokens in user text that don't appear in the normalized form
-   #    but the corrected SKU's description has a similar token
-   # 4. Cluster: if "TT" appears in 5+ corrections and always maps to SKUs
-   #    containing "tiki torch", suggest: r"\btt\b": "tiki torch"
-   # 5. Output as JSON suggestions for human review
-   ```
-
-2. **Also mine ParseCorrectionEvent (from Gap 2):**
-   - If users frequently change brand from "" to "Trex" on items containing "transcend", suggest adding a pattern
-
-3. **Run schedule:** Admin endpoint `GET /admin/mining-suggestions` or cron job
-
-4. **Files to create:** `scripts/mine_correction_patterns.py`
-
----
-
-### Gap 5: Customer-Scoped Aliases (MEDIUM priority, MEDIUM effort)
-
-**Problem:** Different customers use different abbreviations. "CC" means Cinnamon Cove to one customer, cedar closet to another. Global aliases can't handle this.
-
-**Implementation:**
-
-1. **Extend ItemAlias:**
-   ```python
-   customer_context_id = db.Column(db.Integer, db.ForeignKey("customer_job_contexts.id"), nullable=True, index=True)
-   ```
-   - NULL = global alias (current behavior)
-   - Non-NULL = customer-scoped alias
-
-2. **Scoped alias creation (in save_review):**
-   - If the session has a matched customer context (session.matched_context_json contains a customer_context_id), create the alias with that scope
-   - Also create/update global alias (for general learning)
-
-3. **Scoped alias lookup (in _alias_lookup_batch):**
-   - Accept optional `customer_context_id` parameter
-   - Query: customer-scoped aliases first (exact match), then global aliases
-   - Customer scope wins if both exist
-
-4. **Files to modify:** `models.py` (ItemAlias FK), `routes.py` (save_review, process, reprocess — pass customer context ID through), `item_matcher.py` (_alias_lookup functions)
-
----
-
-## Testing Checklist
-
-After implementing each gap:
-
-- [ ] Upload a material list with intentionally bad section headers → verify Re-Parse fixes them (Gap 1)
-- [ ] Correct brand/color on review page → verify corrections persist and feed into reprocess (Gap 2)
-- [ ] Correct "Cinn Cove 1x6" to SKU-X → upload "Cinnamon Cove 1x6 16ft" → verify alias fuzzy-matches (Gap 3)
-- [ ] Make 5+ corrections of same type → run mining script → verify it suggests the pattern (Gap 4)
-- [ ] Set up two customer contexts with conflicting abbreviations → verify correct scoping (Gap 5)
