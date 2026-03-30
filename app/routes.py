@@ -1578,12 +1578,17 @@ def _svix_verify(raw_body: bytes, headers: dict) -> bool:
     if not (svix_id and svix_timestamp and svix_sig):
         return False
 
-    # Strip "whsec_" prefix and base64-decode the secret
+    # Strip "whsec_" prefix, trim whitespace, fix base64 padding, decode
     import base64
-    raw_secret = secret.removeprefix("whsec_")
+    raw_secret = secret.strip()
+    if raw_secret.startswith("whsec_"):
+        raw_secret = raw_secret[len("whsec_"):]
+    # Add padding characters if needed (base64 must be a multiple of 4)
+    raw_secret += "=" * (-len(raw_secret) % 4)
     try:
         key = base64.b64decode(raw_secret)
     except Exception:
+        logger.error("inbound_email: failed to decode webhook secret — check RESEND_WEBHOOK_SECRET format")
         return False
 
     # Build the signed content: "{svix_id}.{svix_timestamp}.{body}"
