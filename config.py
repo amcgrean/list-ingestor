@@ -71,6 +71,12 @@ class Config:
 
     BRANCH_MATCH_FALLBACK_GLOBAL = os.environ.get("BRANCH_MATCH_FALLBACK_GLOBAL", "1") in {"1", "true", "True"}
 
+    # Resend — inbound email ingestion
+    RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+    RESEND_WEBHOOK_SECRET = os.environ.get("RESEND_WEBHOOK_SECRET", "")
+    # Only emails from this domain are accepted for inbound processing
+    INBOUND_ALLOWED_DOMAIN = os.environ.get("INBOUND_ALLOWED_DOMAIN", "beisserlumber.com")
+
     # Optional external customer/job context sync
     CLOUD_CONTEXT_DATABASE_URL = os.environ.get("CLOUD_CONTEXT_DATABASE_URL", "")
     CLOUD_CONTEXT_SOURCE_SYSTEM = os.environ.get("CLOUD_CONTEXT_SOURCE_SYSTEM", "cloud")

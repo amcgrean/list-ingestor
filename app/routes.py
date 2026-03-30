@@ -1535,3 +1535,219 @@ def health():
         "vector_index_items": vector_index_items,
         "vector_model_loaded": vector_model_loaded,
     }), 200 if db_ok else 503
+
+
+# ---------------------------------------------------------------------------
+# Inbound email ingestion (Resend webhook)
+# ---------------------------------------------------------------------------
+# Resend forwards emails sent to import@beisser.cloud to this endpoint.
+# Only emails from @beisserlumber.com senders are processed.
+#
+# Setup steps (one-time in Resend dashboard):
+#   1. Receiving → add beisser.cloud → copy MX record to DNS (priority 10)
+#   2. Webhooks → create webhook → URL: https://<your-domain>/webhooks/inbound-email
+#                                   Event: email.received
+#   3. Copy the webhook secret (whsec_...) → set as RESEND_WEBHOOK_SECRET in .env
+#   4. Set RESEND_API_KEY in .env (your Resend API key)
+#
+# DNS: point MX record for beisser.cloud (or inbound.beisser.cloud) to Resend.
+#      If beisserlumber.com already has MX records, use a subdomain so existing
+#      email service is unaffected.
+
+import hashlib
+import hmac
+import re as _re
+import urllib.request as _urllib_request
+import urllib.error as _urllib_error
+
+
+def _svix_verify(raw_body: bytes, headers: dict) -> bool:
+    """Verify Resend/Svix webhook signature.
+
+    Returns True if the request is genuine, False otherwise.
+    Falls back to True if RESEND_WEBHOOK_SECRET is not configured (dev mode).
+    """
+    secret = current_app.config.get("RESEND_WEBHOOK_SECRET", "")
+    if not secret:
+        logger.warning("inbound_email: RESEND_WEBHOOK_SECRET not set — skipping verification")
+        return True
+
+    svix_id        = headers.get("svix-id", "")
+    svix_timestamp = headers.get("svix-timestamp", "")
+    svix_sig       = headers.get("svix-signature", "")
+    if not (svix_id and svix_timestamp and svix_sig):
+        return False
+
+    # Strip "whsec_" prefix and base64-decode the secret
+    import base64
+    raw_secret = secret.removeprefix("whsec_")
+    try:
+        key = base64.b64decode(raw_secret)
+    except Exception:
+        return False
+
+    # Build the signed content: "{svix_id}.{svix_timestamp}.{body}"
+    signed = f"{svix_id}.{svix_timestamp}.".encode() + raw_body
+    digest = hmac.new(key, signed, hashlib.sha256).digest()
+    computed = "v1," + base64.b64encode(digest).decode()
+
+    # svix-signature may contain multiple space-separated signatures
+    for sig in svix_sig.split(" "):
+        if hmac.compare_digest(computed, sig.strip()):
+            return True
+    return False
+
+
+def _parse_from_email(from_field: str) -> str:
+    """Extract bare email from 'Display Name <email@domain>' or 'email@domain'."""
+    m = _re.search(r"<([^>]+)>", from_field)
+    return (m.group(1) if m else from_field).strip().lower()
+
+
+def _resend_get(path: str, api_key: str) -> dict:
+    """Simple GET to the Resend API — returns parsed JSON or raises."""
+    url = f"https://api.resend.com{path}"
+    req = _urllib_request.Request(url, headers={"Authorization": f"Bearer {api_key}"})
+    with _urllib_request.urlopen(req, timeout=15) as resp:
+        return json.loads(resp.read())
+
+
+def _download_url(url: str) -> bytes:
+    """Fetch raw bytes from a URL."""
+    req = _urllib_request.Request(url)
+    with _urllib_request.urlopen(req, timeout=30) as resp:
+        return resp.read()
+
+
+@main.route("/webhooks/inbound-email", methods=["POST"])
+def inbound_email_webhook():
+    """Receive inbound email from Resend and process any attachments as a material list."""
+    raw_body = request.get_data()
+
+    # ── 1. Verify Svix signature ────────────────────────────────────────────
+    if not _svix_verify(raw_body, dict(request.headers)):
+        logger.warning("inbound_email: invalid webhook signature — rejected")
+        return jsonify({"error": "invalid signature"}), 401
+
+    payload = json.loads(raw_body)
+    if payload.get("type") != "email.received":
+        return jsonify({"ok": True, "skipped": "not email.received"}), 200
+
+    data       = payload.get("data", {})
+    email_id   = data.get("email_id", "")
+    from_field = data.get("from", "")
+    subject    = (data.get("subject") or "").strip()
+    sender     = _parse_from_email(from_field)
+
+    # ── 2. Sender domain check ──────────────────────────────────────────────
+    allowed_domain = current_app.config.get("INBOUND_ALLOWED_DOMAIN", "beisserlumber.com")
+    if not sender.endswith(f"@{allowed_domain}"):
+        logger.info("inbound_email: rejected sender %s (not @%s)", sender, allowed_domain)
+        return jsonify({"ok": True, "skipped": "sender not allowed"}), 200
+
+    # ── 3. Check for supported attachments ─────────────────────────────────
+    attachments = data.get("attachments", [])
+    supported_exts = current_app.config.get(
+        "ALLOWED_EXTENSIONS", {"jpg", "jpeg", "png", "pdf", "csv"}
+    )
+    valid_attachments = [
+        a for a in attachments
+        if Path(a.get("filename", "")).suffix.lstrip(".").lower() in supported_exts
+    ]
+
+    if not valid_attachments:
+        logger.info(
+            "inbound_email: email_id=%s from=%s has no supported attachments — skipped",
+            email_id, sender,
+        )
+        return jsonify({"ok": True, "skipped": "no supported attachments"}), 200
+
+    api_key = current_app.config.get("RESEND_API_KEY", "")
+    if not api_key:
+        logger.error("inbound_email: RESEND_API_KEY not configured")
+        return jsonify({"error": "server misconfigured"}), 500
+
+    # ── 4. Download attachments via Resend API ──────────────────────────────
+    saved_uploads: list[tuple[str, Path]] = []
+    for att in valid_attachments:
+        att_id   = att.get("id", "")
+        filename = secure_filename(att.get("filename", f"attachment_{att_id}"))
+        try:
+            meta         = _resend_get(f"/emails/{email_id}/attachments/{att_id}", api_key)
+            download_url = meta.get("download_url", "")
+            if not download_url:
+                logger.warning("inbound_email: no download_url for attachment %s", att_id)
+                continue
+            content = _download_url(download_url)
+        except Exception as exc:
+            logger.error("inbound_email: failed to download attachment %s: %s", att_id, exc)
+            continue
+
+        ext = Path(filename).suffix
+        fd, tmp_path = tempfile.mkstemp(suffix=ext)
+        try:
+            with os.fdopen(fd, "wb") as fh:
+                fh.write(content)
+            saved_uploads.append((filename, Path(tmp_path)))
+        except Exception as exc:
+            logger.error("inbound_email: failed to save attachment %s: %s", filename, exc)
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
+    if not saved_uploads:
+        logger.warning("inbound_email: all attachment downloads failed for email_id=%s", email_id)
+        return jsonify({"ok": True, "skipped": "attachment download failed"}), 200
+
+    # ── 5. Resolve or provision the sender as a User ────────────────────────
+    with db.session.begin_nested():
+        user = User.query.filter_by(email=sender, is_active=True).first()
+        if user is None:
+            user = _auto_provision_user(sender)
+        if user is None:
+            logger.error("inbound_email: could not provision user for %s", sender)
+            return jsonify({"error": "could not provision user"}), 500
+
+    # ── 6. Pick a branch (user default → first active branch) ───────────────
+    branch = (
+        user.default_branch
+        or Branch.query.filter_by(is_active=True).order_by(Branch.id).first()
+    )
+    if not branch:
+        logger.error("inbound_email: no active branch available")
+        return jsonify({"error": "no active branch"}), 500
+
+    # ── 7. Create ProcessingSession and launch background processing ─────────
+    upload_context = f"Email from {sender}" + (f": {subject}" if subject else "")
+    first_ext = saved_uploads[0][1].suffix.lstrip(".").lower()
+    proc_session = ProcessingSession(
+        filename=", ".join(name for name, _ in saved_uploads)[:255],
+        file_type=first_ext if len(saved_uploads) == 1 else "batch",
+        branch=branch,
+        user=user,
+        status="processing",
+        progress_message="Received via email — processing...",
+        system_id=branch.code,
+        upload_context=upload_context,
+    )
+    db.session.add(proc_session)
+    db.session.commit()
+
+    app_obj = current_app._get_current_object()
+    thread = threading.Thread(
+        target=_process_session_background,
+        args=(app_obj, proc_session.id, saved_uploads, branch.id, upload_context, branch.code),
+        daemon=True,
+    )
+    thread.start()
+
+    logger.info(
+        "inbound_email: session %d created for %s (%d attachment(s)) subject=%r",
+        proc_session.id, sender, len(saved_uploads), subject,
+    )
+    return jsonify({
+        "ok": True,
+        "session_id": proc_session.id,
+        "attachments": len(saved_uploads),
+    }), 200
