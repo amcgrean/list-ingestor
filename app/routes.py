@@ -1630,7 +1630,7 @@ def inbound_email_webhook():
     raw_body = request.get_data()
 
     # ── 1. Verify Svix signature ────────────────────────────────────────────
-    if not _svix_verify(raw_body, dict(request.headers)):
+    if not _svix_verify(raw_body, {k.lower(): v for k, v in request.headers.items()}):
         logger.warning("inbound_email: invalid webhook signature — rejected")
         return jsonify({"error": "invalid signature"}), 401
 
