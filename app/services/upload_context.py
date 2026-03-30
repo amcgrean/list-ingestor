@@ -3,7 +3,39 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
+
+
+# ---------------------------------------------------------------------------
+# Project-type detection and context-aware keyword injection
+# ---------------------------------------------------------------------------
+# When the upload_context or document summary indicates a project type, inject
+# species/treatment keywords so the matcher biases toward the right lumber.
+# Example: "deck" → inject "treated exterior" so "joists" finds treated SYP
+# instead of untreated SPF.  "framing" → inject "spf fir" to avoid treated.
+#
+# Keys are regex patterns matched against the combined context text (case-insensitive).
+# Values are keyword strings appended to every item's enriched match text.
+_PROJECT_TYPE_SIGNALS: list[tuple[re.Pattern, str]] = [
+    (re.compile(r'\b(deck|decking|porch|pergola)\b', re.IGNORECASE), "treated exterior pressure treated"),
+    (re.compile(r'\b(framing|interior|wall|floor)\b', re.IGNORECASE), "spf fir spruce pine fir"),
+    (re.compile(r'\b(roof|roofing)\b', re.IGNORECASE), "lumber rafter treated"),
+    (re.compile(r'\b(fence|fencing)\b', re.IGNORECASE), "cedar pressure treated post"),
+    (re.compile(r'\b(foundation|sill|mudsill|crawl)\b', re.IGNORECASE), "pressure treated ground contact"),
+]
+
+
+def _detect_project_type_keywords(upload_context: str, document_context: dict | None) -> str:
+    """Return extra keywords to inject based on detected project type, or empty string."""
+    summary = (document_context or {}).get("summary", "") or ""
+    combined = f"{upload_context} {summary}".strip()
+    if not combined:
+        return ""
+    for pattern, keywords in _PROJECT_TYPE_SIGNALS:
+        if pattern.search(combined):
+            return keywords
+    return ""
 
 
 def compact_text(value: Any) -> str:
@@ -79,6 +111,13 @@ def enrich_description_for_matching(
         match_clauses.append(", ".join(normalized["job_notes"]))
     if upload_context:
         match_clauses.append(compact_text(upload_context))
+
+    # Inject implicit species/treatment keywords when the project type is detectable.
+    # E.g. "deck" context → "treated exterior pressure treated" so "joists" finds
+    # treated SYP rather than SPF studs.
+    project_keywords = _detect_project_type_keywords(upload_context, document_context)
+    if project_keywords:
+        match_clauses.append(project_keywords)
 
     if not match_clauses:
         return base_description

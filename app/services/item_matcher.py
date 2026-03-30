@@ -157,6 +157,19 @@ _ABBREVIATIONS = {
     # ── Board dimension SKU tokens ────────────────────────────────────────────
     r"\b54x6\b": "5/4x6",  # compiled with IGNORECASE — covers 54X6 too
     r"\b125x6\b": "5/4x6",
+    # ── OCR misread recovery ─────────────────────────────────────────────────
+    # Digit '1' is often OCR-misread as 'L'; '0' as 'O'; 'I' as 'L'.
+    # These aliases catch garbled Simpson Strong-Tie product codes.
+    r"\b1us\b": "Simpson LUS joist hanger",    # 1→L
+    r"\b1os\b": "Simpson LUS joist hanger",    # 1→L, o→U
+    r"\bIus\b": "Simpson LUS joist hanger",    # I→L
+    r"\b1us2\b": "Simpson LUS2 joist hanger",
+    r"\b1us210\b": "Simpson LUS210 joist hanger",
+    r"\bh0s\b": "Simpson HUS hanger",          # 0→U
+    r"\bhus\b": "Simpson HUS hanger",
+    r"\b1tp\b": "Simpson LTP strap",           # 1→L
+    r"\b1sp\b": "Simpson LSP angle",           # 1→L
+    r"\b1ss\b": "Simpson LSS strap",           # 1→L (distinct from 'ss'=stainless)
 }
 
 # Pre-compile abbreviation patterns for performance
@@ -429,7 +442,9 @@ _COLOR_TO_BRAND: dict[str, str] = {
 _FINISH_CONFLICT_GROUPS: list[frozenset[str]] = [
     frozenset({"bronze"}),
     frozenset({"stainless", "stainless steel"}),
-    frozenset({"galvanized", "galv", "hot dip galvanized"}),
+    frozenset({"galvanized", "galv", "hot dip galvanized", "hdg"}),
+    frozenset({"copper"}),
+    frozenset({"ceramic", "ceramic coated"}),
 ]
 _FINISH_CONFLICT_PENALTY = -0.15
 
@@ -446,22 +461,71 @@ def _finish_conflict_penalty(query_norm: str, catalog_searchable: str) -> float:
 
 
 # ---------------------------------------------------------------------------
-# Dimension-in-text match bonus
+# Wood species conflict penalty
+# ---------------------------------------------------------------------------
+# Mutually-exclusive wood species/treatment groups.  Penalty fires only when
+# the *query* explicitly names a species and the catalog item names a different
+# species — so "2x10 joists" (no species) never triggers this.
+#
+# Uses pre-compiled regex with word boundaries to avoid false matches like
+# "untreated" triggering the "treated" group, or "conifer" triggering "fir".
+_SPECIES_CONFLICT_PATTERNS: list[re.Pattern] = [
+    # Pressure-treated group (SYP treated, ACQ, ground contact)
+    re.compile(r'\b(pressure\s+treated|treated|wolmanized|ground\s+contact|above\s+ground|acq\s+pressure\s+treated)\b', re.IGNORECASE),
+    # Untreated fir / hem-fir group
+    re.compile(r'\b(douglas\s+fir|hem-?fir|hemlock\s+fir|doug\s+fir|(?<![a-z])fir(?![a-z]))\b', re.IGNORECASE),
+    # Cedar group
+    re.compile(r'\b(western\s+red\s+cedar|cedar|wrc)\b', re.IGNORECASE),
+    # SPF / spruce group
+    re.compile(r'\b(spruce\s+pine\s+fir|spruce\s+pine|spf|spruce)\b', re.IGNORECASE),
+]
+_SPECIES_CONFLICT_PENALTY = -0.12
+
+
+def _species_conflict_penalty(query_norm: str, catalog_searchable: str) -> float:
+    """Return _SPECIES_CONFLICT_PENALTY when query and catalog name different wood species."""
+    cat = catalog_searchable.lower()
+    for i, qpat in enumerate(_SPECIES_CONFLICT_PATTERNS):
+        if qpat.search(query_norm):
+            for j, cpat in enumerate(_SPECIES_CONFLICT_PATTERNS):
+                if i != j and cpat.search(cat):
+                    return _SPECIES_CONFLICT_PENALTY
+    return 0.0
+
+
+# ---------------------------------------------------------------------------
+# Dimension-in-text match bonus / mismatch penalty
 # ---------------------------------------------------------------------------
 # When a fractional dimension (e.g. "3-1/8", "1-1/2", "3/4") appears in the
-# *query*, give a +0.06 bonus if that exact string also appears in the catalog
-# item description/searchable text.  This prevents cases like "3-1/8" screw"
-# matching "1-1/2" screw" just because the vector similarity for both is high.
+# *query*, give a +0.10 bonus if that exact string also appears in the catalog
+# item description/searchable text.  If the catalog has other dimensions but
+# NOT the query dimension, apply a -0.08 mismatch penalty.
+#
+# The net spread is 0.18 between a correct-size match and a wrong-size match
+# when catalog items contain explicit size tokens.
 _DIM_RE = re.compile(r'\b(\d+[-\u2013]\d+/\d+|\d+/\d+|\d+x\d+)\b', re.IGNORECASE)
 
 
 def _dimension_text_bonus(query_norm: str, catalog_searchable: str) -> float:
-    """Return +0.06 if a fractional dimension from the query appears in catalog text."""
+    """Return +0.10 if a dimension from the query appears in catalog text."""
     dims = _DIM_RE.findall(query_norm)
     if not dims:
         return 0.0
     cat = catalog_searchable.lower()
-    return 0.06 if any(d in cat for d in dims) else 0.0
+    return 0.10 if any(d in cat for d in dims) else 0.0
+
+
+def _dimension_mismatch_penalty(query_norm: str, catalog_searchable: str) -> float:
+    """Return -0.08 if query has dimensions absent from catalog but catalog has other dimensions."""
+    query_dims = _DIM_RE.findall(query_norm)
+    if not query_dims:
+        return 0.0
+    cat = catalog_searchable.lower()
+    if not _DIM_RE.search(cat):
+        return 0.0  # catalog has no dimension tokens — nothing to conflict with
+    if any(d in cat for d in query_dims):
+        return 0.0  # at least one query dimension present in catalog — no mismatch
+    return -0.08
 
 
 def _brand_match_bonus(parsed_brand: str | None, catalog_item: ERPItem) -> float:
@@ -583,8 +647,11 @@ def match_item_candidates(
             final_score += 0.08
         final_score += _brand_match_bonus(parsed_brand, item)
         final_score += _color_match_bonus(parsed_color, item)
-        final_score += _finish_conflict_penalty(norm_desc, item.searchable_text or "")
-        final_score += _dimension_text_bonus(norm_desc, item.searchable_text or "")
+        searchable = item.searchable_text or ""
+        final_score += _finish_conflict_penalty(norm_desc, searchable)
+        final_score += _species_conflict_penalty(norm_desc, searchable)
+        final_score += _dimension_text_bonus(norm_desc, searchable)
+        final_score += _dimension_mismatch_penalty(norm_desc, searchable)
 
         candidates.append({
             "sku": item.sku,
@@ -693,8 +760,11 @@ def match_items_batch(
                     final_score += 0.08
                 final_score += _brand_match_bonus(brand, item)
                 final_score += _color_match_bonus(color, item)
-                final_score += _finish_conflict_penalty(norm_desc, item.searchable_text or "")
-                final_score += _dimension_text_bonus(norm_desc, item.searchable_text or "")
+                searchable = item.searchable_text or ""
+                final_score += _finish_conflict_penalty(norm_desc, searchable)
+                final_score += _species_conflict_penalty(norm_desc, searchable)
+                final_score += _dimension_text_bonus(norm_desc, searchable)
+                final_score += _dimension_mismatch_penalty(norm_desc, searchable)
 
                 candidates.append({
                     "sku": item.sku,
@@ -762,8 +832,11 @@ def _fuzzy_only_candidates(
             final_score += 0.08
         final_score += _brand_match_bonus(parsed_brand, item)
         final_score += _color_match_bonus(parsed_color, item)
-        final_score += _finish_conflict_penalty(norm_desc, item.searchable_text or "")
-        final_score += _dimension_text_bonus(norm_desc, item.searchable_text or "")
+        searchable = item.searchable_text or ""
+        final_score += _finish_conflict_penalty(norm_desc, searchable)
+        final_score += _species_conflict_penalty(norm_desc, searchable)
+        final_score += _dimension_text_bonus(norm_desc, searchable)
+        final_score += _dimension_mismatch_penalty(norm_desc, searchable)
         scored.append({
             "sku": item.sku,
             "description": item.description,
