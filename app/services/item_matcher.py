@@ -96,8 +96,29 @@ _ABBREVIATIONS = {
     r"\blp\b": "LP SmartSide Louisiana Pacific",
     # ── Hardwood / exotic decking ───────────────────────────────────────────
     r"\bipe\b": "ipe hardwood decking",
-    # ── Misc ────────────────────────────────────────────────────────────────
+    # ── Misc lumber field slang / OCR typos ─────────────────────────────────
     r"\bwonaized\b": "wainscot",
+    # "Fur" = handwritten/OCR shorthand for Fir (distinct from \bfurring\b above)
+    r"\bfur\b": "fir",
+    # "pine" alone steers toward dimensional lumber
+    r"\bpine\b": "pine lumber dimensional",
+    # "green" prefix in lumber = fresh-cut pressure treated
+    r"\bgreen\s+treated\b": "green treated pressure treated",
+    r"\bgreen\s+lumber\b": "green lumber pressure treated",
+    # ── Hardware brand / product slang ───────────────────────────────────────
+    # "Tico" = Tico brand deck screws (a common site-supplied fastener brand)
+    r"\btico\b": "Tico deck screw fastener",
+    # "gold lags" = GRK Gold series structural screws (yellow zinc coated)
+    r"\bgold\s*lags?\b": "GRK gold structural lag screw",
+    r"\bgold\s+screws?\b": "GRK gold structural screw",
+    # "ledger locks" / "ledger bolts" = large structural screws for ledger boards
+    r"\bledger\s+locks?\b": "ledger lock structural screw",
+    r"\bledger\s+bolts?\b": "ledger bolt structural screw",
+    # "thru bolts" / "thru locks" = through-bolt or LedgerLOK
+    r"\bthru\s+locks?\b": "through bolt LedgerLOK structural",
+    # "hurricane ties" = Simpson H-series hurricane/seismic strap
+    r"\bhurricane\s+ties?\b": "Simpson hurricane tie H strap seismic",
+    r"\bh2\.5\b": "Simpson H2.5 hurricane tie",
     # ── Trex color code abbreviations (from distributor SKU strings) ─────────
     r"\bcinncov\b": "cinnamon cove",
     r"\bcinncv\b": "cinnamon cove",

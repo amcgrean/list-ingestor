@@ -217,4 +217,76 @@ def create_app(config_class=Config):
             "current_branch": getattr(g, "current_branch", None),
         }
 
+    # ── Flask CLI commands ──────────────────────────────────────────────────
+    @app.cli.command("promote-aliases")
+    def cmd_promote_aliases():
+        """Promote frequently-corrected descriptions to permanent ItemAlias entries.
+
+        A (normalized_description, final_sku) pair with 3+ feedback confirmations
+        is promoted to an ItemAlias so future matches are instant (confidence=1.0).
+        Run daily via cron or manually after a batch of sessions are reviewed.
+        """
+        import click
+        from app.models import ERPItem, ItemAlias, MatchFeedbackEvent
+        from sqlalchemy import func
+        from datetime import datetime
+
+        PROMOTE_THRESHOLD = 3
+
+        candidates = (
+            MatchFeedbackEvent.query.with_entities(
+                MatchFeedbackEvent.normalized_description,
+                MatchFeedbackEvent.final_sku,
+                func.count(MatchFeedbackEvent.id).label("cnt"),
+            )
+            .filter(
+                MatchFeedbackEvent.final_sku.isnot(None),
+                MatchFeedbackEvent.was_skipped.is_(False),
+            )
+            .group_by(
+                MatchFeedbackEvent.normalized_description,
+                MatchFeedbackEvent.final_sku,
+            )
+            .having(func.count(MatchFeedbackEvent.id) >= PROMOTE_THRESHOLD)
+            .all()
+        )
+
+        created = skipped_exists = skipped_no_sku = 0
+        for norm_desc, sku, cnt in candidates:
+            if not norm_desc or not sku:
+                continue
+            existing = ItemAlias.query.filter_by(alias=norm_desc).first()
+            if existing:
+                if existing.sku == sku:
+                    existing.usage_count = cnt
+                skipped_exists += 1
+                continue
+            item = ERPItem.query.filter_by(item_code=sku).first()
+            if not item:
+                skipped_no_sku += 1
+                continue
+            db.session.add(ItemAlias(alias=norm_desc, sku=sku, usage_count=cnt))
+            click.echo("[%s] NEW ALIAS: %r -> %s | %s [%dx]" % (
+                datetime.utcnow().strftime("%Y-%m-%d %H:%M"),
+                norm_desc, sku, item.description[:50], cnt,
+            ))
+            created += 1
+
+        db.session.commit()
+        click.echo("\nNew aliases: %d  |  Already existed: %d  |  SKU not found: %d" % (
+            created, skipped_exists, skipped_no_sku
+        ))
+
+    @app.cli.command("daily-digest")
+    def cmd_daily_digest():
+        """Print a 7-day operations digest: sessions, quality, gaps, alias queue."""
+        import subprocess, sys
+        from pathlib import Path
+        script = Path(__file__).parent.parent / "scripts" / "daily_digest.py"
+        if script.exists():
+            subprocess.run([sys.executable, str(script)], check=False)
+        else:
+            import click
+            click.echo("daily_digest.py not found at %s" % script)
+
     return app
