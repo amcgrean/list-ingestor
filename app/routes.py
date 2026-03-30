@@ -172,13 +172,38 @@ def _cloudflare_email() -> str:
     return (request.headers.get(header_name) or "").strip().lower()
 
 
+def _auto_provision_user(email: str) -> User | None:
+    """Create an account for first-time Beisser email logins.
+
+    CF Access has already verified the OTP, so the email is trusted.
+    Only @beisserlumber.com addresses are auto-provisioned.
+    """
+    if not email.endswith("@beisserlumber.com"):
+        return None
+    user = User(
+        email=email,
+        full_name="",
+        is_admin=False,
+        is_active=True,
+    )
+    db.session.add(user)
+    db.session.commit()
+    import logging as _log
+    _log.getLogger(__name__).info("auto_provisioned user: %s", email)
+    return user
+
+
 def _refresh_current_user() -> User | None:
     email = _cloudflare_email()
     user = None
     if email:
         user = User.query.filter_by(email=email).first()
+        if user is None:
+            user = _auto_provision_user(email)
         if user and user.is_active:
             session["user_id"] = user.id
+        elif user and not user.is_active:
+            user = None
     elif session.get("user_id"):
         user = db.session.get(User, session["user_id"])
         if user and not user.is_active:
@@ -290,7 +315,9 @@ def login():
     if request.method == "POST":
         email = (request.form.get("email") or "").strip().lower()
         user = User.query.filter_by(email=email, is_active=True).first()
-        if user:
+        if user is None:
+            user = _auto_provision_user(email)
+        if user and user.is_active:
             session["user_id"] = user.id
             if user.default_branch_id:
                 session["branch_id"] = user.default_branch_id
