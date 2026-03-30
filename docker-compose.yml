@@ -9,6 +9,8 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - DATABASE_URL=postgresql://erp:erp@db:5432/erp
       - UPLOAD_FOLDER=/app/uploads
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - RESEND_WEBHOOK_SECRET=${RESEND_WEBHOOK_SECRET}
     depends_on:
       db:
         condition: service_healthy
