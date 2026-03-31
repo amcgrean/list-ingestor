@@ -1644,6 +1644,14 @@ def inbound_email_webhook():
     subject    = (data.get("subject") or "").strip()
     sender     = _parse_from_email(from_field)
 
+    # DEBUG: log full attachment metadata so we can see what fields are present
+    _raw_attachments = data.get("attachments", [])
+    logger.info(
+        "inbound_email: email_id=%s from=%s attachments=%s",
+        email_id, sender,
+        json.dumps([{k: v for k, v in a.items() if k != "content"} for a in _raw_attachments]),
+    )
+
     # ── 2. Sender domain check ──────────────────────────────────────────────
     allowed_domain = current_app.config.get("INBOUND_ALLOWED_DOMAIN", "beisserlumber.com")
     if not sender.endswith(f"@{allowed_domain}"):
@@ -1678,11 +1686,16 @@ def inbound_email_webhook():
         att_id   = att.get("id", "")
         filename = secure_filename(att.get("filename", f"attachment_{att_id}"))
         try:
-            meta         = _resend_get(f"/emails/receiving/{email_id}/attachments/{att_id}", api_key)
-            download_url = meta.get("download_url", "")
+            # Payload may already include download_url (Resend beta behaviour varies).
+            # Fall back to a direct API call if not present.
+            download_url = att.get("download_url", "")
+            if not download_url:
+                meta         = _resend_get(f"/emails/receiving/{email_id}/attachments/{att_id}", api_key)
+                download_url = meta.get("download_url", "")
             if not download_url:
                 logger.warning("inbound_email: no download_url for attachment %s", att_id)
                 continue
+            logger.info("inbound_email: downloading attachment %s (%s) via %s…", att_id, filename, download_url[:60])
             content = _download_url(download_url)
         except Exception as exc:
             logger.error("inbound_email: failed to download attachment %s: %s", att_id, exc)
