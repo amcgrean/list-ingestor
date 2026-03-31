@@ -1678,7 +1678,7 @@ def inbound_email_webhook():
         att_id   = att.get("id", "")
         filename = secure_filename(att.get("filename", f"attachment_{att_id}"))
         try:
-            meta         = _resend_get(f"/emails/{email_id}/attachments/{att_id}", api_key)
+            meta         = _resend_get(f"/emails/receiving/{email_id}/attachments/{att_id}", api_key)
             download_url = meta.get("download_url", "")
             if not download_url:
                 logger.warning("inbound_email: no download_url for attachment %s", att_id)
