@@ -1612,7 +1612,7 @@ def _parse_from_email(from_field: str) -> str:
 def _resend_get(path: str, api_key: str) -> dict:
     """Simple GET to the Resend API — returns parsed JSON or raises."""
     url = f"https://api.resend.com{path}"
-    req = _urllib_request.Request(url, headers={"Authorization": f"Bearer {api_key}"})
+    req = _urllib_request.Request(url, headers={"Authorization": f"Bearer {api_key}", "User-Agent": "list-ingestor/1.0"})
     with _urllib_request.urlopen(req, timeout=15) as resp:
         return json.loads(resp.read())
 
