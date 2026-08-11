@@ -41,6 +41,15 @@ class Config:
     CONTEXT_PIPELINE_FALLBACK_TO_LEGACY = os.environ.get("CONTEXT_PIPELINE_FALLBACK_TO_LEGACY", "true").lower() == "true"
     PARSE_DEBUG_SAVE_JSON = os.environ.get("PARSE_DEBUG_SAVE_JSON", "false").lower() == "true"
 
+    # Retain a copy of each uploaded image/PDF after processing so parse output
+    # can be re-benchmarked against alternative extractors (e.g. on-device
+    # Apple Vision / Android ML Kit).  Off by default: uploads are customer
+    # documents, and this keeps them on disk indefinitely.
+    PARSE_ARCHIVE_UPLOADS = os.environ.get("PARSE_ARCHIVE_UPLOADS", "false").lower() == "true"
+    PARSE_ARCHIVE_DIR = os.environ.get(
+        "PARSE_ARCHIVE_DIR", str(BASE_DIR / "data" / "upload_archive")
+    )
+
     # Authentication / tenancy
     CLOUDFLARE_ACCESS_EMAIL_HEADER = os.environ.get(
         "CLOUDFLARE_ACCESS_EMAIL_HEADER", "Cf-Access-Authenticated-User-Email"

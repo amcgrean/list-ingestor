@@ -8,6 +8,7 @@ import io
 import json
 import logging
 import os
+import shutil
 import tempfile
 import threading
 import time
@@ -134,6 +135,35 @@ def save_upload(file) -> Path:
             pass
         raise
     return Path(tmp_path)
+
+
+def _archive_uploads_if_enabled(session_id: int, saved_uploads: list) -> None:
+    """Copy uploads into the archive dir before the pipeline deletes them.
+
+    Uploads normally live in a tempfile for the duration of processing and are
+    unlinked in a ``finally`` block, which means archived sessions keep their
+    parsed *output* but lose the source image.  Benchmarking an alternative
+    extractor needs both, so this preserves the input when
+    ``PARSE_ARCHIVE_UPLOADS`` is set.
+
+    Never raises: archiving is diagnostic, and must not fail an upload.
+    """
+    if not current_app.config.get("PARSE_ARCHIVE_UPLOADS"):
+        return
+
+    try:
+        archive_root = Path(current_app.config["PARSE_ARCHIVE_DIR"]) / f"session_{session_id}"
+        archive_root.mkdir(parents=True, exist_ok=True)
+        for index, (original_name, file_path) in enumerate(saved_uploads, start=1):
+            source = Path(file_path)
+            if not source.exists():
+                continue
+            # Prefix with the index so multi-file batches keep their upload
+            # order, which Stage A depends on for file_index attribution.
+            safe_name = secure_filename(original_name) or f"upload{source.suffix}"
+            shutil.copy2(source, archive_root / f"{index:02d}_{safe_name}")
+    except Exception:  # pragma: no cover - diagnostic path only
+        logger.warning("upload_archive_failed", extra={"session_id": session_id}, exc_info=True)
 
 def _resolve_system_id() -> str:
     return (
@@ -630,6 +660,7 @@ def _process_session_background(app, session_id, saved_uploads, branch_id, uploa
             )
             return
         finally:
+            _archive_uploads_if_enabled(session.id, saved_uploads)
             for _, file_path in saved_uploads:
                 try:
                     os.unlink(file_path)
