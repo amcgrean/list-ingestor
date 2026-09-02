@@ -1,0 +1,36 @@
+{
+  "source": "Handwritten yellow legal pad photo — deck package quote",
+  "document_context": {
+    "summary": "Deck project material list: green treated framing lumber, Deckorator Voyager Sedona composite decking, black handrail with wine cap and round spindles",
+    "customer_name": "",
+    "project_name": "417 Oakwood Ct, Altoona, IA 50009",
+    "global_material_context": [
+      "Green lumber (treated framing)",
+      "Deckorator Voyager Sedona deck material",
+      "Black handrail with wine cap, round spindles"
+    ],
+    "job_notes": ["rail to house connection kit crossed out — do not order"]
+  },
+  "lines": [
+    {"id": "L1", "quantity": 13, "description": "2x10x12' joists", "section": "Green lumber"},
+    {"id": "L2", "quantity": 2, "description": "2x10x16' ledger / stair treads", "section": "Green lumber"},
+    {"id": "L3", "quantity": 3, "description": "2x12x16' beam / stringers", "section": "Green lumber"},
+    {"id": "L4", "quantity": 2, "description": "2x4x12' blocks", "section": "Green lumber"},
+    {"id": "L5", "quantity": 2, "description": "2x6x12' backer", "section": "Green lumber"},
+    {"id": "L6", "quantity": 2, "description": "2x10x10' post backer", "section": "Green lumber"},
+    {"id": "L7", "quantity": 2, "description": "vinyl drip cap", "section": "Green lumber"},
+    {"id": "L8", "quantity": 6, "description": "12\" fascia", "section": "Deck Material", "brand": "Deckorator", "color": "Sedona"},
+    {"id": "L9", "quantity": 2, "description": "7\" riser", "section": "Deck Material", "brand": "Deckorator", "color": "Sedona"},
+    {"id": "L10", "quantity": 8, "description": "no groove deck boards 16' (picture frame / stairs / wine cap)", "section": "Deck Material", "brand": "Deckorator", "color": "Sedona"},
+    {"id": "L11", "quantity": 26, "description": "grooved deck boards 16'", "section": "Deck Material", "brand": "Deckorator", "color": "Sedona"},
+    {"id": "L12", "quantity": 1, "description": "hidden fastener system / fascia screws / screws with plugs", "section": "Deck Material", "brand": "Deckorator"},
+    {"id": "L13", "quantity": 3, "description": "beam to post 6x6 connectors", "section": "Deck Material"},
+    {"id": "L14", "quantity": 2, "description": "90 degree inside connectors", "section": "Deck Material"},
+    {"id": "L15", "quantity": 11, "description": "2x10-16 joist hangers", "section": "Deck Material"},
+    {"id": "L16", "quantity": 4, "description": "stair posts", "section": "Handrail", "color": "Black"},
+    {"id": "L17", "quantity": 6, "description": "straight posts", "section": "Handrail", "color": "Black"},
+    {"id": "L18", "quantity": 4, "description": "5' straight rail kits", "section": "Handrail", "color": "Black"},
+    {"id": "L19", "quantity": 2, "description": "8' straight rail kits", "section": "Handrail", "color": "Black"},
+    {"id": "L20", "quantity": 2, "description": "stair rail kits", "section": "Handrail", "color": "Black"}
+  ]
+}

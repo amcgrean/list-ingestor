@@ -1,0 +1,20 @@
+{
+  "source": "Handwritten pink note photo — exterior trim/siding order",
+  "document_context": {
+    "summary": "Exterior trim and siding order: 5/4 white smooth trim boards, Hardie plank, cedar mill sheets, battens, caulk, soffit",
+    "customer_name": "Earl",
+    "project_name": "",
+    "global_material_context": ["Trim boards 5/4 white smooth"],
+    "job_notes": []
+  },
+  "lines": [
+    {"id": "L1", "quantity": 24, "description": "4\" trim board 5/4 white smooth"},
+    {"id": "L2", "quantity": 12, "description": "6\" trim board 5/4 white smooth"},
+    {"id": "L3", "quantity": 12, "description": "8\" trim board 5/4 white smooth"},
+    {"id": "L4", "quantity": 3, "description": "smooth Hardie plank 8\"", "brand": "James Hardie"},
+    {"id": "L5", "quantity": 12, "description": "4x10' sheets white cedar mill"},
+    {"id": "L6", "quantity": 16, "description": "battens white"},
+    {"id": "L7", "quantity": 1, "description": "case caulk white"},
+    {"id": "L8", "quantity": 1, "description": "black vented soffit"}
+  ]
+}
