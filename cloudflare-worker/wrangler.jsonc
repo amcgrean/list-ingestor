@@ -1,0 +1,23 @@
+{
+  // Material list matcher — static page + /api/process endpoint.
+  // Deploy: npx wrangler deploy   (then: npx wrangler secret put ANTHROPIC_API_KEY)
+  "name": "list-matcher",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS"
+  },
+  "vars": {
+    // Model for parse+match. Override per-environment if needed.
+    "MODEL": "claude-opus-5"
+  }
+  // Secrets (set via `wrangler secret put`):
+  //   ANTHROPIC_API_KEY — used for all requests when set. If unset, the page
+  //                       must supply a key per request (stored in the
+  //                       browser's localStorage, sent as x-user-api-key).
+  //   ACCESS_CODE       — optional shared passcode; when set, requests must
+  //                       carry it in x-access-code. For real protection put
+  //                       the worker behind Cloudflare Access instead.
+}
