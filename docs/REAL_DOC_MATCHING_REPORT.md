@@ -131,3 +131,125 @@ python scripts/match_real_docs.py --json-out results.json
 # CI-safe fuzzy-only regression
 python -m unittest tests.test_real_doc_fixtures
 ```
+
+---
+
+# Round 2 — Real Beisser catalog (same day)
+
+Re-ran the same six fixtures against a **real Agility stocked-items export**
+(`items_stocking_uom.xlsx` from Drive: `item, description, ext_description,
+size_, stocking_uom`, 1,546 rows → 1,544 usable). The export was converted
+with the production raw-catalog path — `sku_pipeline.preprocess_raw_catalog`
+with the absent raw columns blanked and `system_id=10FD` — so size/length/
+color/keywords derivation is exactly what a live import produces. The catalog
+CSV itself is **not** committed (business data); full per-line results are in
+`docs/real_doc_match_results_beisser10FD.json`.
+
+**Catalog scope matters:** this export is an interior millwork/doors/trim
+branch catalog — 47 bifolds, MDF/oak/pine mouldings, birch plywood — with
+essentially **no deck program** (0 hits for trex/timbertech/westbury/
+hurricane/6x6/hardie/moistureshield, 1 treated lumber item). So the three
+deck documents are out-of-domain here and mostly *should not* match; the
+doors and built-ins documents are squarely in-domain.
+
+## Headline numbers (real catalog)
+
+| Document | strong ≥0.75 | review 0.55–0.75 | weak <0.55 | in domain? |
+|---|---|---|---|---|
+| steve_hick_doors (11) | 0 | 4 | 7 | **yes** |
+| builtins_rooms (6) | 2 | 1 | 3 | **yes** |
+| earl_trim_boards (8) | 0 | 2 | 6 | partly |
+| espelund_deck (40) | 0 | 1 | 39 | no |
+| oakwood_deck (20) | 0 | 5 | 15 | no |
+| beisser_moistureshield (8) | 0 | 4 | 4 | no |
+
+Nothing out-of-domain crossed 0.75 — an auto-confirm bar at 0.75 would have
+shipped **zero** wrong lines. But the 0.55–0.75 review band is polluted by
+the context black-hole below.
+
+## Round-2 findings
+
+### R1 — Size+length+species stacking works at real-catalog scale (WIN)
+
+`1x6 primed pine @ 16ft` → `16s4sprime16` (1x6-16' S4S FJ primed pine) at
+**0.87**, and `1x4 …` → `14s4sprime16` at **0.87** — exact right answers out
+of 1,544 items. `sheets 1/4" plywood` (built-ins context) → `pineac4825`
+(4x8-1/4" AC radiata pine plywood, 0.58) — a defensible pick with birch 1/4"
+as runner-up. `case caulk white` → `caulkpolacrwht` (white acrylic caulk) is
+**correct** but scores only 0.50 — right answers can sit below the review
+band on a big catalog (floor calibration must be per-catalog, see F3).
+
+### R2 — F1 context pollution is *worse* on a real catalog (HIGH, confirms F1)
+
+All 20 Oakwood lines — plywood, drip cap, joist hangers, deck boards — match
+`handrailbkmtbkhd` (**handrail bracket-HD-matte black**) with an identical
+fuzzy score of 0.52. `token_set_ratio` scores the *context suffix* ("Black
+handrail with wine cap…") as a full subset match against the bracket's short
+text, and per-line signal drowns. Espelund: 8 of 40 lines land on
+`slfgtside1p1068` (a fiberglass **sidelite**). With 1,544 items there is
+always *some* item that resonates with the injected context, so every
+document develops a black-hole SKU. This is the single highest-leverage fix.
+
+### R3 — Door size-code vocabulary gap (NEW, HIGH for door branches)
+
+Contractors write door sizes as `2-8`, `2-6`, `3-0`; the catalog writes
+Agility 4-digit codes `2868`, `2667`/`2668`, `3068`. Nothing bridges them:
+
+- `2-6 bifold door` → `slstl6p2868db` (2868 6-panel **steel** door), while
+  `2667 1-3/8" hc primed flush bifold` sits unmatched in the catalog.
+- All four `2-8 …` prehung lines → the same 2868 steel door (right width by
+  luck of the vector, wrong product family; runner-up was a 3068).
+
+**Recommendation:** normalize `W-H` size tokens in `normalise_description`:
+`2-8` → inject `2868`, `2-6` → `2667 2668` (bifolds are 6'7"), `3-0` →
+`3068`, etc. This is a mechanical `_ABBREVIATIONS`-style rewrite and would
+fix the whole class.
+
+### R4 — Trade profile names missing from the abbreviation table (NEW, MEDIUM)
+
+- `nickel gap` → junk (`clayjamb491680`, 0.43) while
+  `11/16x5-1/4"-16' mdf sl16 shiplap primed` exists. Add
+  `nickel gap → shiplap nickel gap`.
+- `base 4 1/2 MDF flat` → `pinebase3col00` (pine colonial 3") while
+  `414 e1e 1/2"x4-1/4"-16' mdf base` exists; `casing 3 1/2 MDF flat` →
+  oak colonial 2-1/4" while `412 e2e 19/32"x3-1/2"-16' mdf casing` exists.
+  Two compounding causes: profile codes (`414`, `e1e`, `sl16`) carry no
+  semantic signal, and **material mismatch (MDF vs pine/oak) is unpenalized**
+  — the finish-conflict machinery covers metals only. Consider a wood/sheet
+  material conflict group (mdf | pine | oak | poplar | birch) mirroring
+  `_FINISH_CONFLICT_GROUPS`, and catalog-side keyword enrichment for profile
+  numbers ("flat", face width in inches).
+- `hook strip` → weak 1-1/2" pine match; add `hook strip → closet hook strip
+  s4s pine` if that's the stocked SKU family.
+
+### R5 — Deck docs against a millwork branch: correct rejection, noisy top hits
+
+39 of 40 Espelund lines below 0.55 is the *right* outcome for a catalog with
+no deck program — the confidence signal separates cleanly. But the named top
+hits are semantically absurd (deck boards → sidelite), which reinforces F3:
+below a floor, return no match instead of the least-bad SKU. It also
+confirms branch-scoped matching (`cache_key=branch:N`) is load-bearing:
+these documents need to be tested against a deck-stocking branch export
+(the Pi master catalog with treated/Trex/Westbury per HANDOFF session 25).
+
+## Reproducing round 2
+
+```bash
+# 1. Convert the Agility export (fills absent raw columns, system_id=10FD)
+python - <<'PY'
+import pandas as pd
+from app.services.sku_pipeline import preprocess_raw_catalog
+src = pd.read_excel("items_stocking_uom.xlsx")
+for col in ["major_description","minor_description","keyword_string",
+            "keyword_user_defined","last_sold_date"]:
+    src[col] = ""
+src["system_id"] = "10FD"
+out = preprocess_raw_catalog(src)
+out["item_code"] = out["sku"]
+out.to_csv("beisser_catalog_10FD.csv", index=False)
+PY
+
+# 2. Match
+python scripts/match_real_docs.py --catalog beisser_catalog_10FD.csv \
+    --json-out results_real.json
+```

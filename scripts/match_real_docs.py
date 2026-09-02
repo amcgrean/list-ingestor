@@ -121,10 +121,12 @@ def load_catalog(csv_path: Path) -> list[ERPItem]:
                     item_code=code,
                     description=desc,
                     keywords=(row.get("keywords") or "").strip(),
-                    category=(row.get("category") or "").strip(),
+                    category=(row.get("category") or row.get("material_category") or "").strip(),
                     size=size or "",
                     length=length or "",
                     brand=(row.get("brand") or "").strip(),
+                    color=(row.get("color") or "").strip(),
+                    ext_description=(row.get("ext_description") or "").strip(),
                 )
             )
     return items

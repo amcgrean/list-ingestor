@@ -1,0 +1,1409 @@
+{
+  "beisser_moistureshield": [
+    {
+      "id": "L1",
+      "quantity": 46,
+      "raw": "16' deck boards Cape Cod Gray",
+      "enriched_query": "16' deck boards Cape Cod Gray MoistureShield Vantage decking, Cape Cod Gray, black textured Westbury C-10 railings 2.5\" color match screws marked with a question mark, tally-mark quantities on railing sections treated exterior pressure treated",
+      "matched_item_code": "handrailbkmtbkhd",
+      "matched_description": "handrail bracket-hd-matte black",
+      "confidence_score": 0.4032,
+      "fuzzy_score": 0.2222,
+      "vector_score": 0.5905,
+      "runner_up": {
+        "sku": "shelfscrewpack",
+        "confidence_score": 0.337
+      }
+    },
+    {
+      "id": "L2",
+      "quantity": 20,
+      "raw": "12' deck boards Cape Cod Gray",
+      "enriched_query": "12' deck boards Cape Cod Gray MoistureShield Vantage decking, Cape Cod Gray, black textured Westbury C-10 railings 2.5\" color match screws marked with a question mark, tally-mark quantities on railing sections treated exterior pressure treated",
+      "matched_item_code": "handrailbkmtbkhd",
+      "matched_description": "handrail bracket-hd-matte black",
+      "confidence_score": 0.4018,
+      "fuzzy_score": 0.2222,
+      "vector_score": 0.5883,
+      "runner_up": {
+        "sku": "barndrhdwblk6orc",
+        "confidence_score": 0.3378
+      }
+    },
+    {
+      "id": "L3",
+      "quantity": 1,
+      "raw": "box 2 1/2\" color match screws",
+      "enriched_query": "box 2 1/2\" color match screws MoistureShield Vantage decking, Cape Cod Gray, black textured Westbury C-10 railings 2.5\" color match screws marked with a question mark, tally-mark quantities on railing sections treated exterior pressure treated",
+      "matched_item_code": "handrailbkmtbkhd",
+      "matched_description": "handrail bracket-hd-matte black",
+      "confidence_score": 0.3944,
+      "fuzzy_score": 0.2222,
+      "vector_score": 0.5759,
+      "runner_up": {
+        "sku": "shelfpolebrktfix",
+        "confidence_score": 0.3689
+      }
+    },
+    {
+      "id": "L4",
+      "quantity": 5,
+      "raw": "8' railing sections black textured Westbury C-10",
+      "enriched_query": "8' railing sections black textured Westbury C-10 MoistureShield Vantage decking, Cape Cod Gray, black textured Westbury C-10 railings 2.5\" color match screws marked with a question mark, tally-mark quantities on railing sections treated exterior pressure treated",
+      "matched_item_code": "handrailbkmtbkhd",
+      "matched_description": "handrail bracket-hd-matte black",
+      "confidence_score": 0.5631,
+      "fuzzy_score": 0.2222,
+      "vector_score": 0.6236,
+      "runner_up": {
+        "sku": "handrailbk26hd",
+        "confidence_score": 0.3545
+      }
+    },
+    {
+      "id": "L5",
+      "quantity": 3,
+      "raw": "7' railing sections black textured Westbury C-10",
+      "enriched_query": "7' railing sections black textured Westbury C-10 MoistureShield Vantage decking, Cape Cod Gray, black textured Westbury C-10 railings 2.5\" color match screws marked with a question mark, tally-mark quantities on railing sections treated exterior pressure treated",
+      "matched_item_code": "handrailbkmtbkhd",
+      "matched_description": "handrail bracket-hd-matte black",
+      "confidence_score": 0.5622,
+      "fuzzy_score": 0.2222,
+      "vector_score": 0.6223,
+      "runner_up": {
+        "sku": "handrailbk26hd",
+        "confidence_score": 0.3547
+      }
+    },
+    {
+      "id": "L6",
+      "quantity": 2,
+      "raw": "6' railing sections black textured Westbury C-10",
+      "enriched_query": "6' railing sections black textured Westbury C-10 MoistureShield Vantage decking, Cape Cod Gray, black textured Westbury C-10 railings 2.5\" color match screws marked with a question mark, tally-mark quantities on railing sections treated exterior pressure treated",
+      "matched_item_code": "handrailbkmtbkhd",
+      "matched_description": "handrail bracket-hd-matte black",
+      "confidence_score": 0.5652,
+      "fuzzy_score": 0.2222,
+      "vector_score": 0.6272,
+      "runner_up": {
+        "sku": "barndrhdwblk6orc",
+        "confidence_score": 0.485
+      }
+    },
+    {
+      "id": "L7",
+      "quantity": 7,
+      "raw": "2x2 posts (not crossovers) black textured Westbury C-10",
+      "enriched_query": "2x2 posts (not crossovers) black textured Westbury C-10 MoistureShield Vantage decking, Cape Cod Gray, black textured Westbury C-10 railings 2.5\" color match screws marked with a question mark, tally-mark quantities on railing sections treated exterior pressure treated",
+      "matched_item_code": "handrailbkmtbkhd",
+      "matched_description": "handrail bracket-hd-matte black",
+      "confidence_score": 0.5637,
+      "fuzzy_score": 0.2222,
+      "vector_score": 0.6247,
+      "runner_up": {
+        "sku": "handrailbk26hd",
+        "confidence_score": 0.3495
+      }
+    },
+    {
+      "id": "L8",
+      "quantity": 1,
+      "raw": "6' sliding patio door clay color vinyl Gerkin",
+      "enriched_query": "6' sliding patio door clay color vinyl Gerkin MoistureShield Vantage decking, Cape Cod Gray, black textured Westbury C-10 railings 2.5\" color match screws marked with a question mark, tally-mark quantities on railing sections treated exterior pressure treated",
+      "matched_item_code": "claybasev80800",
+      "matched_description": "2808j clay coat victorian base 4-1/4\"x16",
+      "confidence_score": 0.4799,
+      "fuzzy_score": 0.2353,
+      "vector_score": 0.4763,
+      "runner_up": {
+        "sku": "claybasev51400",
+        "confidence_score": 0.4778
+      }
+    }
+  ],
+  "builtins_rooms": [
+    {
+      "id": "L1",
+      "quantity": 22,
+      "raw": "sheets 1/4\" plywood",
+      "enriched_query": "TOTALS sheets 1/4\" plywood interior built-ins, primed pine trim Room breakdown: Primary Bath, Bed 3, Bed 4, Bed 2; totals row used for order spf fir spruce pine fir",
+      "matched_item_code": "pineac4825",
+      "matched_description": "4x8-1/4\" ac radiata pine plywood",
+      "confidence_score": 0.5786,
+      "fuzzy_score": 0.4615,
+      "vector_score": 0.4899,
+      "runner_up": {
+        "sku": "whiteoakply4814",
+        "confidence_score": 0.5212
+      }
+    },
+    {
+      "id": "L2",
+      "quantity": 23,
+      "raw": "1x6 primed pine @ 16ft",
+      "enriched_query": "TOTALS 1x6 primed pine @ 16ft interior built-ins, primed pine trim Room breakdown: Primary Bath, Bed 3, Bed 4, Bed 2; totals row used for order spf fir spruce pine fir",
+      "matched_item_code": "16s4sprime16",
+      "matched_description": "1x6-16' s4s fj primed pine",
+      "confidence_score": 0.8678,
+      "fuzzy_score": 0.597,
+      "vector_score": 0.615,
+      "runner_up": {
+        "sku": "0106pine216",
+        "confidence_score": 0.8333
+      }
+    },
+    {
+      "id": "L3",
+      "quantity": 59,
+      "raw": "1x4 primed pine @ 16ft",
+      "enriched_query": "TOTALS 1x4 primed pine @ 16ft interior built-ins, primed pine trim Room breakdown: Primary Bath, Bed 3, Bed 4, Bed 2; totals row used for order spf fir spruce pine fir",
+      "matched_item_code": "14s4sprime16",
+      "matched_description": "1x4-16' s4s fj primed pine",
+      "confidence_score": 0.8668,
+      "fuzzy_score": 0.597,
+      "vector_score": 0.6133,
+      "runner_up": {
+        "sku": "0104pine216",
+        "confidence_score": 0.8241
+      }
+    },
+    {
+      "id": "L4",
+      "quantity": 200,
+      "raw": "hook strip",
+      "enriched_query": "TOTALS hook strip interior built-ins, primed pine trim Room breakdown: Primary Bath, Bed 3, Bed 4, Bed 2; totals row used for order spf fir spruce pine fir",
+      "matched_item_code": "112s4sprime16",
+      "matched_description": "1x12-16' s4s fj primed pine",
+      "confidence_score": 0.3972,
+      "fuzzy_score": 0.3607,
+      "vector_score": 0.4216,
+      "runner_up": {
+        "sku": "2448prpanelmld16",
+        "confidence_score": 0.3609
+      }
+    },
+    {
+      "id": "L5",
+      "quantity": 235,
+      "raw": "nickel gap",
+      "enriched_query": "Bed 4 nickel gap interior built-ins, primed pine trim Room breakdown: Primary Bath, Bed 3, Bed 4, Bed 2; totals row used for order spf fir spruce pine fir",
+      "matched_item_code": "clayjamb491680",
+      "matched_description": "8/0 x 4-9/16\" primed fj pine jamb",
+      "confidence_score": 0.43,
+      "fuzzy_score": 0.4074,
+      "vector_score": 0.4451,
+      "runner_up": {
+        "sku": "18s4sprime16",
+        "confidence_score": 0.4117
+      }
+    },
+    {
+      "id": "L6",
+      "quantity": 66,
+      "raw": "nickel gap vanity wall",
+      "enriched_query": "Bed 4 + Bed 2 nickel gap vanity wall interior built-ins, primed pine trim Room breakdown: Primary Bath, Bed 3, Bed 4, Bed 2; totals row used for order spf fir spruce pine fir",
+      "matched_item_code": "slprm9ltl2068",
+      "matched_description": "2068 1-3/8\" 1509 tdl 9-lt prairie primed",
+      "confidence_score": 0.3961,
+      "fuzzy_score": 0.3167,
+      "vector_score": 0.449,
+      "runner_up": {
+        "sku": "2448prpanelmld16",
+        "confidence_score": 0.3782
+      }
+    }
+  ],
+  "earl_trim_boards": [
+    {
+      "id": "L1",
+      "quantity": 24,
+      "raw": "4\" trim board 5/4 white smooth",
+      "enriched_query": "4\" trim board 5/4 white smooth Trim boards 5/4 white smooth",
+      "matched_item_code": "5404cedaye",
+      "matched_description": "5/4x4-lf aye s1s2e cedar",
+      "confidence_score": 0.5704,
+      "fuzzy_score": 0.3881,
+      "vector_score": 0.5252,
+      "runner_up": {
+        "sku": "oakskirt12prem16",
+        "confidence_score": 0.4297
+      }
+    },
+    {
+      "id": "L2",
+      "quantity": 12,
+      "raw": "6\" trim board 5/4 white smooth",
+      "enriched_query": "6\" trim board 5/4 white smooth Trim boards 5/4 white smooth",
+      "matched_item_code": "5404cedaye",
+      "matched_description": "5/4x4-lf aye s1s2e cedar",
+      "confidence_score": 0.5408,
+      "fuzzy_score": 0.3582,
+      "vector_score": 0.4959,
+      "runner_up": {
+        "sku": "oakskirt12prem16",
+        "confidence_score": 0.4358
+      }
+    },
+    {
+      "id": "L3",
+      "quantity": 12,
+      "raw": "8\" trim board 5/4 white smooth",
+      "enriched_query": "8\" trim board 5/4 white smooth Trim boards 5/4 white smooth",
+      "matched_item_code": "hardbdt4818",
+      "matched_description": "4x8-1/8\" hardboard tempered",
+      "confidence_score": 0.4414,
+      "fuzzy_score": 0.4722,
+      "vector_score": 0.5542,
+      "runner_up": {
+        "sku": "hardbdt4814",
+        "confidence_score": 0.4388
+      }
+    },
+    {
+      "id": "L4",
+      "quantity": 3,
+      "raw": "smooth Hardie plank 8\"",
+      "enriched_query": "smooth Hardie plank 8\" Trim boards 5/4 white smooth",
+      "matched_item_code": "pbshelfwht1612",
+      "matched_description": "16\"x12' white particle board shelf",
+      "confidence_score": 0.4763,
+      "fuzzy_score": 0.5385,
+      "vector_score": 0.4348,
+      "runner_up": {
+        "sku": "pbshelfwht1212",
+        "confidence_score": 0.4712
+      }
+    },
+    {
+      "id": "L5",
+      "quantity": 12,
+      "raw": "4x10' sheets white cedar mill",
+      "enriched_query": "4x10' sheets white cedar mill Trim boards 5/4 white smooth",
+      "matched_item_code": "5404cedaye",
+      "matched_description": "5/4x4-lf aye s1s2e cedar",
+      "confidence_score": 0.621,
+      "fuzzy_score": 0.439,
+      "vector_score": 0.5757,
+      "runner_up": {
+        "sku": "mapskirt12prem16",
+        "confidence_score": 0.433
+      }
+    },
+    {
+      "id": "L6",
+      "quantity": 16,
+      "raw": "battens white",
+      "enriched_query": "battens white Trim boards 5/4 white smooth",
+      "matched_item_code": "slprm1ltlwl2668",
+      "matched_description": "2668 1-3/8\" 1-lite white lam. primed dr",
+      "confidence_score": 0.3674,
+      "fuzzy_score": 0.413,
+      "vector_score": 0.4703,
+      "runner_up": {
+        "sku": "frwhtflb4470",
+        "confidence_score": 0.3652
+      }
+    },
+    {
+      "id": "L7",
+      "quantity": 1,
+      "raw": "case caulk white",
+      "enriched_query": "case caulk white Trim boards 5/4 white smooth",
+      "matched_item_code": "caulkpolacrwht",
+      "matched_description": "poly-seam loc-tite white acrylic caulk",
+      "confidence_score": 0.4964,
+      "fuzzy_score": 0.5195,
+      "vector_score": 0.4811,
+      "runner_up": {
+        "sku": "whtoakcrown61300",
+        "confidence_score": 0.3526
+      }
+    },
+    {
+      "id": "L8",
+      "quantity": 1,
+      "raw": "black vented soffit",
+      "enriched_query": "black vented soffit Trim boards 5/4 white smooth",
+      "matched_item_code": "5404cedaye",
+      "matched_description": "5/4x4-lf aye s1s2e cedar",
+      "confidence_score": 0.4283,
+      "fuzzy_score": 0.3333,
+      "vector_score": 0.3249,
+      "runner_up": {
+        "sku": "smokesealblk",
+        "confidence_score": 0.347
+      }
+    }
+  ],
+  "espelund_deck": [
+    {
+      "id": "L1",
+      "quantity": 6,
+      "raw": "bags concrete",
+      "enriched_query": "bags concrete TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "0104pine214",
+      "matched_description": "1x4-14' #2 & better pine",
+      "confidence_score": 0.2815,
+      "fuzzy_score": 0.1967,
+      "vector_score": 0.4713,
+      "runner_up": {
+        "sku": "0108pine214",
+        "confidence_score": 0.2795
+      }
+    },
+    {
+      "id": "L2",
+      "quantity": 15,
+      "raw": "10' 6x6 posts treated",
+      "enriched_query": "10' 6x6 posts treated TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "0106pine210",
+      "matched_description": "1x6-10' #2 & better pine",
+      "confidence_score": 0.4199,
+      "fuzzy_score": 0.2186,
+      "vector_score": 0.5541,
+      "runner_up": {
+        "sku": "0112pine210",
+        "confidence_score": 0.4162
+      }
+    },
+    {
+      "id": "L3",
+      "quantity": 1,
+      "raw": "12' 6x6 post treated",
+      "enriched_query": "12' 6x6 post treated TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "0106pine212",
+      "matched_description": "1x6-12' #2 & better pine",
+      "confidence_score": 0.4278,
+      "fuzzy_score": 0.2198,
+      "vector_score": 0.5664,
+      "runner_up": {
+        "sku": "0108pine212",
+        "confidence_score": 0.4246
+      }
+    },
+    {
+      "id": "L4",
+      "quantity": 15,
+      "raw": "6x6 post base with anchor bolt",
+      "enriched_query": "6x6 post base with anchor bolt TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "pinebase3col00",
+      "matched_description": "pine colonial base 3\" 634l",
+      "confidence_score": 0.4238,
+      "fuzzy_score": 0.2667,
+      "vector_score": 0.5285,
+      "runner_up": {
+        "sku": "claybasev80800",
+        "confidence_score": 0.36
+      }
+    },
+    {
+      "id": "L5",
+      "quantity": 11,
+      "raw": "16' 1 3/4 x 12 LVL",
+      "enriched_query": "16' 1 3/4 x 12 LVL TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "mapply4834",
+      "matched_description": "4x8-3/4\" a-1 maple plywood veneer core",
+      "confidence_score": 0.5581,
+      "fuzzy_score": 0.2715,
+      "vector_score": 0.5824,
+      "runner_up": {
+        "sku": "oakply4875",
+        "confidence_score": 0.5516
+      }
+    },
+    {
+      "id": "L6",
+      "quantity": 28,
+      "raw": "22' 12\" I joists",
+      "enriched_query": "22' 12\" I joists TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "0108pine214",
+      "matched_description": "1x8-14' #2 & better pine",
+      "confidence_score": 0.3429,
+      "fuzzy_score": 0.1979,
+      "vector_score": 0.5728,
+      "runner_up": {
+        "sku": "0104pine214",
+        "confidence_score": 0.341
+      }
+    },
+    {
+      "id": "L7",
+      "quantity": 10,
+      "raw": "16' 12\" I joists",
+      "enriched_query": "16' 12\" I joists TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "0112pine216",
+      "matched_description": "1x12-16' #2 & better pine",
+      "confidence_score": 0.4276,
+      "fuzzy_score": 0.2165,
+      "vector_score": 0.5683,
+      "runner_up": {
+        "sku": "0108pine216",
+        "confidence_score": 0.4169
+      }
+    },
+    {
+      "id": "L8",
+      "quantity": 8,
+      "raw": "1 1/8 x 12\" rim board",
+      "enriched_query": "1 1/8 x 12\" rim board TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "pineac4850",
+      "matched_description": "4x8-1/2\" ac radiata pine plywood",
+      "confidence_score": 0.3603,
+      "fuzzy_score": 0.2294,
+      "vector_score": 0.5809,
+      "runner_up": {
+        "sku": "shimcedar12",
+        "confidence_score": 0.3584
+      }
+    },
+    {
+      "id": "L9",
+      "quantity": 14,
+      "raw": "16' 2x4 white wood",
+      "enriched_query": "16' 2x4 white wood TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "112s4sprime16",
+      "matched_description": "1x12-16' s4s fj primed pine",
+      "confidence_score": 0.4426,
+      "fuzzy_score": 0.2537,
+      "vector_score": 0.5685,
+      "runner_up": {
+        "sku": "0104pine216",
+        "confidence_score": 0.421
+      }
+    },
+    {
+      "id": "L10",
+      "quantity": 12,
+      "raw": "12' 2x10",
+      "enriched_query": "Treated Materials 12' 2x10 TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "0108pine212",
+      "matched_description": "1x8-12' #2 & better pine",
+      "confidence_score": 0.3793,
+      "fuzzy_score": 0.2128,
+      "vector_score": 0.4903,
+      "runner_up": {
+        "sku": "0104pine212",
+        "confidence_score": 0.3768
+      }
+    },
+    {
+      "id": "L11",
+      "quantity": 3,
+      "raw": "10' 2x10",
+      "enriched_query": "Treated Materials 10' 2x10 TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "0110pine210",
+      "matched_description": "1x10-10' #2 & better pine",
+      "confidence_score": 0.3096,
+      "fuzzy_score": 0.2328,
+      "vector_score": 0.4942,
+      "runner_up": {
+        "sku": "0104pine214",
+        "confidence_score": 0.3023
+      }
+    },
+    {
+      "id": "L12",
+      "quantity": 10,
+      "raw": "16' 2x12",
+      "enriched_query": "Treated Materials 16' 2x12 TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "112s4sprime16",
+      "matched_description": "1x12-16' s4s fj primed pine",
+      "confidence_score": 0.3908,
+      "fuzzy_score": 0.2732,
+      "vector_score": 0.4693,
+      "runner_up": {
+        "sku": "0112pine216",
+        "confidence_score": 0.3763
+      }
+    },
+    {
+      "id": "L13",
+      "quantity": 3,
+      "raw": "12' 2x4",
+      "enriched_query": "Treated Materials 12' 2x4 TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "0108pine212",
+      "matched_description": "1x8-12' #2 & better pine",
+      "confidence_score": 0.3745,
+      "fuzzy_score": 0.2139,
+      "vector_score": 0.4815,
+      "runner_up": {
+        "sku": "0104pine212",
+        "confidence_score": 0.3744
+      }
+    },
+    {
+      "id": "L14",
+      "quantity": 100,
+      "raw": "H2.5 hurricane ties",
+      "enriched_query": "H2.5 hurricane ties TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "handrailbkmtbkhd",
+      "matched_description": "handrail bracket-hd-matte black",
+      "confidence_score": 0.3912,
+      "fuzzy_score": 0.2283,
+      "vector_score": 0.4998,
+      "runner_up": {
+        "sku": "slstl2pct3068sb",
+        "confidence_score": 0.3729
+      }
+    },
+    {
+      "id": "L15",
+      "quantity": 20,
+      "raw": "I joist hangers",
+      "enriched_query": "I joist hangers TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "0108pine214",
+      "matched_description": "1x8-14' #2 & better pine",
+      "confidence_score": 0.2881,
+      "fuzzy_score": 0.1979,
+      "vector_score": 0.4816,
+      "runner_up": {
+        "sku": "0104pine214",
+        "confidence_score": 0.2859
+      }
+    },
+    {
+      "id": "L16",
+      "quantity": 25,
+      "raw": "T25 x 3\" deck screws",
+      "enriched_query": "T25 x 3\" deck screws TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "3/4x9screwus26",
+      "matched_description": "3/4\" x #9 wood screw us26",
+      "confidence_score": 0.3859,
+      "fuzzy_score": 0.4375,
+      "vector_score": 0.4848,
+      "runner_up": {
+        "sku": "ljwhiteoak610212",
+        "confidence_score": 0.3352
+      }
+    },
+    {
+      "id": "L17",
+      "quantity": 2,
+      "raw": "box (48 pieces) 6 1/4\" thru locks",
+      "enriched_query": "box (48 pieces) 6 1/4\" thru locks TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "ljwhiteoak610212",
+      "matched_description": "lj-6102 12' non-plowed white oak rail sc",
+      "confidence_score": 0.541,
+      "fuzzy_score": 0.296,
+      "vector_score": 0.5377,
+      "runner_up": {
+        "sku": "ljwhiteoak610216",
+        "confidence_score": 0.5312
+      }
+    },
+    {
+      "id": "L18",
+      "quantity": 2,
+      "raw": "boxes 3 5/8 ledger locks",
+      "enriched_query": "boxes 3 5/8 ledger locks TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "dgh040",
+      "matched_description": "2nd floor deck framing",
+      "confidence_score": 0.3868,
+      "fuzzy_score": 0.3077,
+      "vector_score": 0.4395,
+      "runner_up": {
+        "sku": "dgh030",
+        "confidence_score": 0.3818
+      }
+    },
+    {
+      "id": "L19",
+      "quantity": 1100,
+      "raw": "hidden fasteners",
+      "enriched_query": "TimberTech Antique Leather hidden fasteners TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "slfgtside1p1068",
+      "matched_description": "1068 1-panel tex fiberglass oak sidelite",
+      "confidence_score": 0.3731,
+      "fuzzy_score": 0.2871,
+      "vector_score": 0.4971,
+      "runner_up": {
+        "sku": "pinehandrail00",
+        "confidence_score": 0.3099
+      }
+    },
+    {
+      "id": "L20",
+      "quantity": 14,
+      "raw": "20' solid deck boards",
+      "enriched_query": "TimberTech Antique Leather 20' solid deck boards TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "slfgtside1p1068",
+      "matched_description": "1068 1-panel tex fiberglass oak sidelite",
+      "confidence_score": 0.3818,
+      "fuzzy_score": 0.3,
+      "vector_score": 0.503,
+      "runner_up": {
+        "sku": "shimcedar42",
+        "confidence_score": 0.313
+      }
+    },
+    {
+      "id": "L21",
+      "quantity": 12,
+      "raw": "16' solid deck boards",
+      "enriched_query": "TimberTech Antique Leather 16' solid deck boards TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "slfgtside1p1068",
+      "matched_description": "1068 1-panel tex fiberglass oak sidelite",
+      "confidence_score": 0.3809,
+      "fuzzy_score": 0.3,
+      "vector_score": 0.5015,
+      "runner_up": {
+        "sku": "0108pine216",
+        "confidence_score": 0.3418
+      }
+    },
+    {
+      "id": "L22",
+      "quantity": 13,
+      "raw": "20' grooved deck boards",
+      "enriched_query": "TimberTech Antique Leather 20' grooved deck boards TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "slfgtside1p1068",
+      "matched_description": "1068 1-panel tex fiberglass oak sidelite",
+      "confidence_score": 0.3751,
+      "fuzzy_score": 0.2871,
+      "vector_score": 0.5004,
+      "runner_up": {
+        "sku": "shimcedar42",
+        "confidence_score": 0.3
+      }
+    },
+    {
+      "id": "L23",
+      "quantity": 135,
+      "raw": "16' grooved deck boards",
+      "enriched_query": "TimberTech Antique Leather 16' grooved deck boards TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "slfgtside1p1068",
+      "matched_description": "1068 1-panel tex fiberglass oak sidelite",
+      "confidence_score": 0.374,
+      "fuzzy_score": 0.2871,
+      "vector_score": 0.4986,
+      "runner_up": {
+        "sku": "0108pine216",
+        "confidence_score": 0.334
+      }
+    },
+    {
+      "id": "L24",
+      "quantity": 5,
+      "raw": "1x12 fascia",
+      "enriched_query": "TimberTech Antique Leather 1x12 fascia TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "0112pine210",
+      "matched_description": "1x12-10' #2 & better pine",
+      "confidence_score": 0.5375,
+      "fuzzy_score": 0.2514,
+      "vector_score": 0.4949,
+      "runner_up": {
+        "sku": "0112pine216",
+        "confidence_score": 0.5316
+      }
+    },
+    {
+      "id": "L25",
+      "quantity": 19,
+      "raw": "1x8 fascia",
+      "enriched_query": "TimberTech Antique Leather 1x8 fascia TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "0108pine214",
+      "matched_description": "1x8-14' #2 & better pine",
+      "confidence_score": 0.5449,
+      "fuzzy_score": 0.2333,
+      "vector_score": 0.5192,
+      "runner_up": {
+        "sku": "0108pine210",
+        "confidence_score": 0.5386
+      }
+    },
+    {
+      "id": "L26",
+      "quantity": 4,
+      "raw": "boxes color match deck screws (Trapeze brand)",
+      "enriched_query": "boxes color match deck screws (Trapeze brand) TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "barndrhdwblk6orc",
+      "matched_description": "6' barn door hardware set-black",
+      "confidence_score": 0.3679,
+      "fuzzy_score": 0.2597,
+      "vector_score": 0.5066,
+      "runner_up": {
+        "sku": "handrailbkmtbkhd",
+        "confidence_score": 0.3519
+      }
+    },
+    {
+      "id": "L27",
+      "quantity": 3,
+      "raw": "boxes fascia screws",
+      "enriched_query": "boxes fascia screws TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "slfgtside1p1068",
+      "matched_description": "1068 1-panel tex fiberglass oak sidelite",
+      "confidence_score": 0.3882,
+      "fuzzy_score": 0.2959,
+      "vector_score": 0.4497,
+      "runner_up": {
+        "sku": "shelfscrewpack",
+        "confidence_score": 0.3741
+      }
+    },
+    {
+      "id": "L28",
+      "quantity": 12,
+      "raw": "47\" posts",
+      "enriched_query": "Black Westbury C10 47\" posts TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "claybasev80800",
+      "matched_description": "2808j clay coat victorian base 4-1/4\"x16",
+      "confidence_score": 0.3167,
+      "fuzzy_score": 0.3188,
+      "vector_score": 0.5152,
+      "runner_up": {
+        "sku": "ljwhiteoak610212",
+        "confidence_score": 0.3165
+      }
+    },
+    {
+      "id": "L29",
+      "quantity": 12,
+      "raw": "37\" posts",
+      "enriched_query": "Black Westbury C10 37\" posts TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "claybasev80800",
+      "matched_description": "2808j clay coat victorian base 4-1/4\"x16",
+      "confidence_score": 0.3145,
+      "fuzzy_score": 0.3092,
+      "vector_score": 0.518,
+      "runner_up": {
+        "sku": "ljwhiteoak610212",
+        "confidence_score": 0.3131
+      }
+    },
+    {
+      "id": "L30",
+      "quantity": 5,
+      "raw": "8' stair railing",
+      "enriched_query": "Black Westbury C10 8' stair railing TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "handrailbkmtbkhd",
+      "matched_description": "handrail bracket-hd-matte black",
+      "confidence_score": 0.5071,
+      "fuzzy_score": 0.2487,
+      "vector_score": 0.5126,
+      "runner_up": {
+        "sku": "pinehandrail00",
+        "confidence_score": 0.3596
+      }
+    },
+    {
+      "id": "L31",
+      "quantity": 10,
+      "raw": "8' level rail",
+      "enriched_query": "Black Westbury C10 8' level rail TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "pinehandrail00",
+      "matched_description": "white pine handrail #231",
+      "confidence_score": 0.3447,
+      "fuzzy_score": 0.2069,
+      "vector_score": 0.5032,
+      "runner_up": {
+        "sku": "ljwhiteoak610212",
+        "confidence_score": 0.3267
+      }
+    },
+    {
+      "id": "L32",
+      "quantity": 4,
+      "raw": "6' level rail",
+      "enriched_query": "Black Westbury C10 6' level rail TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "pinehandrail00",
+      "matched_description": "white pine handrail #231",
+      "confidence_score": 0.3458,
+      "fuzzy_score": 0.2069,
+      "vector_score": 0.505,
+      "runner_up": {
+        "sku": "ljwhiteoak610216",
+        "confidence_score": 0.3312
+      }
+    },
+    {
+      "id": "L33",
+      "quantity": 2,
+      "raw": "extra sets wall mount brackets",
+      "enriched_query": "Black Westbury C10 extra sets wall mount brackets TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "handrailbkmtbkhd",
+      "matched_description": "handrail bracket-hd-matte black",
+      "confidence_score": 0.4523,
+      "fuzzy_score": 0.2802,
+      "vector_score": 0.567,
+      "runner_up": {
+        "sku": "barndrhdwblk6orc",
+        "confidence_score": 0.4081
+      }
+    },
+    {
+      "id": "L34",
+      "quantity": 75,
+      "raw": "downspouts",
+      "enriched_query": "Trex RainEscapes downspouts TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "112s4sprime16",
+      "matched_description": "1x12-16' s4s fj primed pine",
+      "confidence_score": 0.2866,
+      "fuzzy_score": 0.2201,
+      "vector_score": 0.4643,
+      "runner_up": {
+        "sku": "0104pine214",
+        "confidence_score": 0.284
+      }
+    },
+    {
+      "id": "L35",
+      "quantity": 62,
+      "raw": "12' drainage trough",
+      "enriched_query": "Trex RainEscapes 12' drainage trough TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "0108pine212",
+      "matched_description": "1x8-12' #2 & better pine",
+      "confidence_score": 0.3539,
+      "fuzzy_score": 0.1791,
+      "vector_score": 0.4704,
+      "runner_up": {
+        "sku": "0104pine212",
+        "confidence_score": 0.353
+      }
+    },
+    {
+      "id": "L36",
+      "quantity": 10,
+      "raw": "16' drainage trough",
+      "enriched_query": "Trex RainEscapes 16' drainage trough TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "0108pine216",
+      "matched_description": "1x8-16' #2 & better pine",
+      "confidence_score": 0.3484,
+      "fuzzy_score": 0.1791,
+      "vector_score": 0.4613,
+      "runner_up": {
+        "sku": "0112pine216",
+        "confidence_score": 0.3478
+      }
+    },
+    {
+      "id": "L37",
+      "quantity": 24,
+      "raw": "butyl tape",
+      "enriched_query": "Trex RainEscapes butyl tape TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "slfgtside1p1068",
+      "matched_description": "1068 1-panel tex fiberglass oak sidelite",
+      "confidence_score": 0.4001,
+      "fuzzy_score": 0.2915,
+      "vector_score": 0.4726,
+      "runner_up": {
+        "sku": "0108pine214",
+        "confidence_score": 0.2789
+      }
+    },
+    {
+      "id": "L38",
+      "quantity": 48,
+      "raw": "8\" textured siding",
+      "enriched_query": "LP 8\" textured siding TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "slfgtside1p1068",
+      "matched_description": "1068 1-panel tex fiberglass oak sidelite",
+      "confidence_score": 0.4041,
+      "fuzzy_score": 0.2655,
+      "vector_score": 0.4965,
+      "runner_up": {
+        "sku": "slprm9ltl2068",
+        "confidence_score": 0.3509
+      }
+    },
+    {
+      "id": "L39",
+      "quantity": 32,
+      "raw": "4x8 sheets",
+      "enriched_query": "LP 4x8 sheets TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "slprm9ltl2068",
+      "matched_description": "2068 1-3/8\" 1509 tdl 9-lt prairie primed",
+      "confidence_score": 0.3467,
+      "fuzzy_score": 0.2979,
+      "vector_score": 0.5125,
+      "runner_up": {
+        "sku": "doorlt14649lt",
+        "confidence_score": 0.3009
+      }
+    },
+    {
+      "id": "L40",
+      "quantity": 16,
+      "raw": "limestone Vulkem",
+      "enriched_query": "limestone Vulkem TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "slfgtside1p1068",
+      "matched_description": "1068 1-panel tex fiberglass oak sidelite",
+      "confidence_score": 0.387,
+      "fuzzy_score": 0.2902,
+      "vector_score": 0.4515,
+      "runner_up": {
+        "sku": "pinehandrail00",
+        "confidence_score": 0.3482
+      }
+    }
+  ],
+  "oakwood_deck": [
+    {
+      "id": "L1",
+      "quantity": 13,
+      "raw": "2x10x12' joists",
+      "enriched_query": "Green lumber 2x10x12' joists Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "pinehandrail00",
+      "matched_description": "white pine handrail #231",
+      "confidence_score": 0.4823,
+      "fuzzy_score": 0.5,
+      "vector_score": 0.4705,
+      "runner_up": {
+        "sku": "handrailbkmtbkhd",
+        "confidence_score": 0.4821
+      }
+    },
+    {
+      "id": "L2",
+      "quantity": 2,
+      "raw": "2x10x16' ledger / stair treads",
+      "enriched_query": "Green lumber 2x10x16' ledger / stair treads Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "pinehandrail00",
+      "matched_description": "white pine handrail #231",
+      "confidence_score": 0.4883,
+      "fuzzy_score": 0.5,
+      "vector_score": 0.4805,
+      "runner_up": {
+        "sku": "handrailbkmtbkhd",
+        "confidence_score": 0.4833
+      }
+    },
+    {
+      "id": "L3",
+      "quantity": 3,
+      "raw": "2x12x16' beam / stringers",
+      "enriched_query": "Green lumber 2x12x16' beam / stringers Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "pinehandrail00",
+      "matched_description": "white pine handrail #231",
+      "confidence_score": 0.4869,
+      "fuzzy_score": 0.5,
+      "vector_score": 0.4782,
+      "runner_up": {
+        "sku": "handrailbkmtbkhd",
+        "confidence_score": 0.4835
+      }
+    },
+    {
+      "id": "L4",
+      "quantity": 2,
+      "raw": "2x4x12' blocks",
+      "enriched_query": "Green lumber 2x4x12' blocks Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "handrailbkmtbkhd",
+      "matched_description": "handrail bracket-hd-matte black",
+      "confidence_score": 0.4845,
+      "fuzzy_score": 0.5185,
+      "vector_score": 0.4618,
+      "runner_up": {
+        "sku": "pinehandrail00",
+        "confidence_score": 0.4797
+      }
+    },
+    {
+      "id": "L5",
+      "quantity": 2,
+      "raw": "2x6x12' backer",
+      "enriched_query": "Green lumber 2x6x12' backer Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "gripcedarhand06",
+      "matched_description": "2x6-6' grippable cedar handrail",
+      "confidence_score": 0.5147,
+      "fuzzy_score": 0.5106,
+      "vector_score": 0.4174,
+      "runner_up": {
+        "sku": "handrailbkmtbkhd",
+        "confidence_score": 0.4856
+      }
+    },
+    {
+      "id": "L6",
+      "quantity": 2,
+      "raw": "2x10x10' post backer",
+      "enriched_query": "Green lumber 2x10x10' post backer Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "handrailbkmtbkhd",
+      "matched_description": "handrail bracket-hd-matte black",
+      "confidence_score": 0.489,
+      "fuzzy_score": 0.5185,
+      "vector_score": 0.4693,
+      "runner_up": {
+        "sku": "pinehandrail00",
+        "confidence_score": 0.4838
+      }
+    },
+    {
+      "id": "L7",
+      "quantity": 2,
+      "raw": "vinyl drip cap",
+      "enriched_query": "Green lumber vinyl drip cap Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "handrailbkmtbkhd",
+      "matched_description": "handrail bracket-hd-matte black",
+      "confidence_score": 0.4612,
+      "fuzzy_score": 0.5185,
+      "vector_score": 0.423,
+      "runner_up": {
+        "sku": "pinehandrail00",
+        "confidence_score": 0.4565
+      }
+    },
+    {
+      "id": "L8",
+      "quantity": 6,
+      "raw": "12\" fascia",
+      "enriched_query": "Deck Material 12\" fascia Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "handrailbkmtbkhd",
+      "matched_description": "handrail bracket-hd-matte black",
+      "confidence_score": 0.4607,
+      "fuzzy_score": 0.5185,
+      "vector_score": 0.4889,
+      "runner_up": {
+        "sku": "pinehandrail00",
+        "confidence_score": 0.4414
+      }
+    },
+    {
+      "id": "L9",
+      "quantity": 2,
+      "raw": "7\" riser",
+      "enriched_query": "Deck Material 7\" riser Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "handrailbkmtbkhd",
+      "matched_description": "handrail bracket-hd-matte black",
+      "confidence_score": 0.4592,
+      "fuzzy_score": 0.5185,
+      "vector_score": 0.4864,
+      "runner_up": {
+        "sku": "pinehandrail00",
+        "confidence_score": 0.4323
+      }
+    },
+    {
+      "id": "L10",
+      "quantity": 8,
+      "raw": "no groove deck boards 16' (picture frame / stairs / wine cap)",
+      "enriched_query": "Deck Material no groove deck boards 16' (picture frame / stairs / wine cap) Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "handrailbkmtbkhd",
+      "matched_description": "handrail bracket-hd-matte black",
+      "confidence_score": 0.4588,
+      "fuzzy_score": 0.5185,
+      "vector_score": 0.4856,
+      "runner_up": {
+        "sku": "pinehandrail00",
+        "confidence_score": 0.4348
+      }
+    },
+    {
+      "id": "L11",
+      "quantity": 26,
+      "raw": "grooved deck boards 16'",
+      "enriched_query": "Deck Material grooved deck boards 16' Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "handrailbkmtbkhd",
+      "matched_description": "handrail bracket-hd-matte black",
+      "confidence_score": 0.4397,
+      "fuzzy_score": 0.5185,
+      "vector_score": 0.4539,
+      "runner_up": {
+        "sku": "pinehandrail00",
+        "confidence_score": 0.4125
+      }
+    },
+    {
+      "id": "L12",
+      "quantity": 1,
+      "raw": "hidden fastener system / fascia screws / screws with plugs",
+      "enriched_query": "Deck Material hidden fastener system / fascia screws / screws with plugs Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "handrailbkmtbkhd",
+      "matched_description": "handrail bracket-hd-matte black",
+      "confidence_score": 0.4944,
+      "fuzzy_score": 0.5185,
+      "vector_score": 0.4783,
+      "runner_up": {
+        "sku": "pinehandrail00",
+        "confidence_score": 0.4537
+      }
+    },
+    {
+      "id": "L13",
+      "quantity": 3,
+      "raw": "beam to post 6x6 connectors",
+      "enriched_query": "Deck Material beam to post 6x6 connectors Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "handrailbkmtbkhd",
+      "matched_description": "handrail bracket-hd-matte black",
+      "confidence_score": 0.5044,
+      "fuzzy_score": 0.5185,
+      "vector_score": 0.495,
+      "runner_up": {
+        "sku": "pinehandrail00",
+        "confidence_score": 0.4634
+      }
+    },
+    {
+      "id": "L14",
+      "quantity": 2,
+      "raw": "90 degree inside connectors",
+      "enriched_query": "Deck Material 90 degree inside connectors Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "handrailbkmtbkhd",
+      "matched_description": "handrail bracket-hd-matte black",
+      "confidence_score": 0.4928,
+      "fuzzy_score": 0.5185,
+      "vector_score": 0.4756,
+      "runner_up": {
+        "sku": "pinehandrail00",
+        "confidence_score": 0.4578
+      }
+    },
+    {
+      "id": "L15",
+      "quantity": 11,
+      "raw": "2x10-16 joist hangers",
+      "enriched_query": "Deck Material 2x10-16 joist hangers Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "handrailbkmtbkhd",
+      "matched_description": "handrail bracket-hd-matte black",
+      "confidence_score": 0.5034,
+      "fuzzy_score": 0.5185,
+      "vector_score": 0.4933,
+      "runner_up": {
+        "sku": "pinehandrail00",
+        "confidence_score": 0.4724
+      }
+    },
+    {
+      "id": "L16",
+      "quantity": 4,
+      "raw": "stair posts",
+      "enriched_query": "Handrail stair posts Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "handrailbkmtbkhd",
+      "matched_description": "handrail bracket-hd-matte black",
+      "confidence_score": 0.6221,
+      "fuzzy_score": 0.5185,
+      "vector_score": 0.5245,
+      "runner_up": {
+        "sku": "pinehandrail00",
+        "confidence_score": 0.4868
+      }
+    },
+    {
+      "id": "L17",
+      "quantity": 6,
+      "raw": "straight posts",
+      "enriched_query": "Handrail straight posts Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "handrailbkmtbkhd",
+      "matched_description": "handrail bracket-hd-matte black",
+      "confidence_score": 0.6302,
+      "fuzzy_score": 0.5185,
+      "vector_score": 0.538,
+      "runner_up": {
+        "sku": "pinehandrail00",
+        "confidence_score": 0.4887
+      }
+    },
+    {
+      "id": "L18",
+      "quantity": 4,
+      "raw": "5' straight rail kits",
+      "enriched_query": "Handrail 5' straight rail kits Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "handrailbkmtbkhd",
+      "matched_description": "handrail bracket-hd-matte black",
+      "confidence_score": 0.6364,
+      "fuzzy_score": 0.5185,
+      "vector_score": 0.5484,
+      "runner_up": {
+        "sku": "pinehandrail00",
+        "confidence_score": 0.4967
+      }
+    },
+    {
+      "id": "L19",
+      "quantity": 2,
+      "raw": "8' straight rail kits",
+      "enriched_query": "Handrail 8' straight rail kits Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "handrailbkmtbkhd",
+      "matched_description": "handrail bracket-hd-matte black",
+      "confidence_score": 0.6383,
+      "fuzzy_score": 0.5185,
+      "vector_score": 0.5515,
+      "runner_up": {
+        "sku": "pinehandrail00",
+        "confidence_score": 0.4948
+      }
+    },
+    {
+      "id": "L20",
+      "quantity": 2,
+      "raw": "stair rail kits",
+      "enriched_query": "Handrail stair rail kits Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "handrailbkmtbkhd",
+      "matched_description": "handrail bracket-hd-matte black",
+      "confidence_score": 0.6245,
+      "fuzzy_score": 0.5185,
+      "vector_score": 0.5286,
+      "runner_up": {
+        "sku": "pinehandrail00",
+        "confidence_score": 0.4862
+      }
+    }
+  ],
+  "steve_hick_doors": [
+    {
+      "id": "L1",
+      "quantity": 2,
+      "raw": "2-8 LH interior door 7 1/4 jamb 2 panel solid core",
+      "enriched_query": "2-8 LH interior door 7 1/4 jamb 2 panel solid core 2 panel solid core interior doors spf fir spruce pine fir",
+      "matched_item_code": "slstl6p2868db",
+      "matched_description": "2868 6-panel steel door-double bore",
+      "confidence_score": 0.5213,
+      "fuzzy_score": 0.3308,
+      "vector_score": 0.6483,
+      "runner_up": {
+        "sku": "slstl6p3068db",
+        "confidence_score": 0.5179
+      }
+    },
+    {
+      "id": "L2",
+      "quantity": 2,
+      "raw": "2-8 RH interior door 4 9/16 jamb 2 panel solid core",
+      "enriched_query": "2-8 RH interior door 4 9/16 jamb 2 panel solid core 2 panel solid core interior doors spf fir spruce pine fir",
+      "matched_item_code": "slstl6p2868db",
+      "matched_description": "2868 6-panel steel door-double bore",
+      "confidence_score": 0.5282,
+      "fuzzy_score": 0.3407,
+      "vector_score": 0.6532,
+      "runner_up": {
+        "sku": "slstl6p3068db",
+        "confidence_score": 0.5265
+      }
+    },
+    {
+      "id": "L3",
+      "quantity": 1,
+      "raw": "2-8 RH interior door 7 1/4 jamb 2 panel solid core",
+      "enriched_query": "2-8 RH interior door 7 1/4 jamb 2 panel solid core 2 panel solid core interior doors spf fir spruce pine fir",
+      "matched_item_code": "slstl6p2868db",
+      "matched_description": "2868 6-panel steel door-double bore",
+      "confidence_score": 0.5236,
+      "fuzzy_score": 0.3284,
+      "vector_score": 0.6537,
+      "runner_up": {
+        "sku": "slstl6p3068db",
+        "confidence_score": 0.5189
+      }
+    },
+    {
+      "id": "L4",
+      "quantity": 1,
+      "raw": "2-8 LH interior door 4 9/16 jamb 2 panel solid core",
+      "enriched_query": "2-8 LH interior door 4 9/16 jamb 2 panel solid core 2 panel solid core interior doors spf fir spruce pine fir",
+      "matched_item_code": "slstl6p2868db",
+      "matched_description": "2868 6-panel steel door-double bore",
+      "confidence_score": 0.5262,
+      "fuzzy_score": 0.3433,
+      "vector_score": 0.6481,
+      "runner_up": {
+        "sku": "slstl6p3068db",
+        "confidence_score": 0.5256
+      }
+    },
+    {
+      "id": "L5",
+      "quantity": 2,
+      "raw": "2-6 bifold door",
+      "enriched_query": "2-6 bifold door 2 panel solid core interior doors spf fir spruce pine fir",
+      "matched_item_code": "slstl6p2868db",
+      "matched_description": "2868 6-panel steel door-double bore",
+      "confidence_score": 0.5163,
+      "fuzzy_score": 0.3697,
+      "vector_score": 0.6141,
+      "runner_up": {
+        "sku": "slfgs2pflt3068",
+        "confidence_score": 0.5087
+      }
+    },
+    {
+      "id": "L6",
+      "quantity": 1,
+      "raw": "4-0 bifold door",
+      "enriched_query": "4-0 bifold door 2 panel solid core interior doors spf fir spruce pine fir",
+      "matched_item_code": "slfgs2pflt3068",
+      "matched_description": "3068 2-flat panel smooth fiberglass door",
+      "confidence_score": 0.5127,
+      "fuzzy_score": 0.4154,
+      "vector_score": 0.5775,
+      "runner_up": {
+        "sku": "slstl6p2868db",
+        "confidence_score": 0.5099
+      }
+    },
+    {
+      "id": "L7",
+      "quantity": 2,
+      "raw": "5-0 bifold door",
+      "enriched_query": "5-0 bifold door 2 panel solid core interior doors spf fir spruce pine fir",
+      "matched_item_code": "slfgs2pflt3068",
+      "matched_description": "3068 2-flat panel smooth fiberglass door",
+      "confidence_score": 0.5023,
+      "fuzzy_score": 0.4154,
+      "vector_score": 0.5602,
+      "runner_up": {
+        "sku": "slstl6p2868db",
+        "confidence_score": 0.4999
+      }
+    },
+    {
+      "id": "L8",
+      "quantity": 96,
+      "raw": "1x4 pine",
+      "enriched_query": "1x4 pine 2 panel solid core interior doors spf fir spruce pine fir",
+      "matched_item_code": "0104pine214",
+      "matched_description": "1x4-14' #2 & better pine",
+      "confidence_score": 0.6659,
+      "fuzzy_score": 0.3902,
+      "vector_score": 0.5497,
+      "runner_up": {
+        "sku": "stilepine134",
+        "confidence_score": 0.4241
+      }
+    },
+    {
+      "id": "L9",
+      "quantity": 15,
+      "raw": "cove moulding",
+      "enriched_query": "cove moulding 2 panel solid core interior doors spf fir spruce pine fir",
+      "matched_item_code": "oakpnlmld73100",
+      "matched_description": "f731 oak panel moulding",
+      "confidence_score": 0.6133,
+      "fuzzy_score": 0.7568,
+      "vector_score": 0.5177,
+      "runner_up": {
+        "sku": "slfgs2pflt3068",
+        "confidence_score": 0.4526
+      }
+    },
+    {
+      "id": "L10",
+      "quantity": 32,
+      "raw": "base 4 1/2 MDF flat",
+      "enriched_query": "base 4 1/2 MDF flat 2 panel solid core interior doors spf fir spruce pine fir",
+      "matched_item_code": "pinebase3col00",
+      "matched_description": "pine colonial base 3\" 634l",
+      "confidence_score": 0.5661,
+      "fuzzy_score": 0.5143,
+      "vector_score": 0.6006,
+      "runner_up": {
+        "sku": "birchply4814mdf",
+        "confidence_score": 0.4237
+      }
+    },
+    {
+      "id": "L11",
+      "quantity": 40,
+      "raw": "casing 3 1/2 MDF flat",
+      "enriched_query": "casing 3 1/2 MDF flat 2 panel solid core interior doors spf fir spruce pine fir",
+      "matched_item_code": "oakcase115col03",
+      "matched_description": "f115 3' oak colonial casing 1/2\"x2-1/4\"",
+      "confidence_score": 0.6097,
+      "fuzzy_score": 0.3876,
+      "vector_score": 0.5911,
+      "runner_up": {
+        "sku": "oakcase115col07",
+        "confidence_score": 0.6016
+      }
+    }
+  ]
+}
