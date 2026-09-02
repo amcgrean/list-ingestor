@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>List Matcher</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --card: #ffffff; --ink: #1f2421; --muted: #6b7267;
+    --line: #e3e1da; --accent: #2f6f4f; --accent-ink: #ffffff;
+    --warn: #a15c00; --bad: #a13232; --good: #2f6f4f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #171a18; --card: #20241f; --ink: #e8e6df; --muted: #9aa094;
+      --line: #343a33; --accent: #58a97f; --accent-ink: #10130f;
+      --warn: #d99a3d; --bad: #d97070; --good: #6fbf94;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1080px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; margin: 8px 0 2px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+          padding: 14px; margin-bottom: 14px; }
+  label { font-size: 13px; color: var(--muted); display: block; margin: 8px 0 3px; }
+  input[type=text], input[type=password], textarea {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px;
+    background: var(--bg); color: var(--ink); font: inherit; }
+  textarea { min-height: 54px; resize: vertical; }
+  button { font: inherit; border: 0; border-radius: 8px; padding: 10px 16px; cursor: pointer; }
+  .primary { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  .ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+  button:disabled { opacity: .5; cursor: default; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .thumbs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .thumb { position: relative; width: 84px; height: 84px; border: 1px solid var(--line);
+           border-radius: 8px; overflow: hidden; background: var(--bg);
+           display: flex; align-items: center; justify-content: center;
+           font-size: 11px; color: var(--muted); text-align: center; }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .thumb .x { position: absolute; top: 2px; right: 2px; background: rgba(0,0,0,.55);
+              color: #fff; border-radius: 50%; width: 20px; height: 20px; padding: 0;
+              line-height: 20px; font-size: 12px; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line);
+           vertical-align: top; }
+  th { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  td input.qty { width: 64px; padding: 4px 6px; border: 1px solid var(--line);
+                 border-radius: 6px; background: var(--bg); color: var(--ink); font: inherit; }
+  .sku { font-family: ui-monospace, monospace; font-size: 13px; }
+  .raw { color: var(--muted); font-size: 12px; }
+  .conf { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 12px;
+          font-weight: 600; }
+  .conf.good { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
+  .conf.mid { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+  .conf.bad { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); }
+  .note { color: var(--warn); font-size: 12px; }
+  select { max-width: 260px; font: inherit; padding: 4px; border-radius: 6px;
+           background: var(--bg); color: var(--ink); border: 1px solid var(--line); }
+  .status { color: var(--muted); font-size: 13px; }
+  .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--muted);
+          border-top-color: transparent; border-radius: 50%; margin-right: 6px;
+          animation: r 0.8s linear infinite; vertical-align: -2px; }
+  @keyframes r { to { transform: rotate(360deg); } }
+  .err { color: var(--bad); font-size: 14px; }
+  .tablewrap { overflow-x: auto; }
+  .usage { color: var(--muted); font-size: 12px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>List Matcher</h1>
+  <div class="sub">Photograph a material list &rarr; Claude reads it and matches every line to stocked SKUs.</div>
+
+  <div class="card">
+    <div class="row">
+      <button class="ghost" id="pick">&#128247; Add photos / PDF</button>
+      <input type="file" id="file" accept="image/*,application/pdf" multiple hidden>
+      <button class="primary" id="run" disabled>Match against catalog</button>
+      <span class="status" id="status"></span>
+    </div>
+    <div class="thumbs" id="thumbs"></div>
+    <label for="notes">Job context (optional — e.g. "deck job", "interior trim for Hick house")</label>
+    <textarea id="notes" placeholder=""></textarea>
+    <details id="settings">
+      <summary>Settings</summary>
+      <label for="key">Claude API key (only needed if the worker has no server key; stays in this browser)</label>
+      <input type="password" id="key" placeholder="sk-ant-...">
+      <label for="code">Access code (if this page requires one)</label>
+      <input type="password" id="code">
+    </details>
+  </div>
+
+  <div class="card" id="results" hidden>
+    <div class="row" style="justify-content: space-between;">
+      <div>
+        <strong id="summary"></strong>
+        <div class="sub" id="meta"></div>
+      </div>
+      <div class="row">
+        <button class="ghost" id="copy">Copy CSV</button>
+        <button class="primary" id="csv">Download CSV</button>
+      </div>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Qty</th><th>Unit</th><th>Item</th><th>Matched SKU</th><th>Conf</th><th></th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <div class="usage" id="usage"></div>
+  </div>
+</main>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const state = { files: [], result: null };
+
+$("key").value = localStorage.getItem("lm_key") || "";
+$("code").value = localStorage.getItem("lm_code") || "";
+$("key").addEventListener("change", () => localStorage.setItem("lm_key", $("key").value.trim()));
+$("code").addEventListener("change", () => localStorage.setItem("lm_code", $("code").value.trim()));
+
+fetch("/api/health").then(r => r.json()).then(h => {
+  if (!h.server_key || h.access_code_required) $("settings").open = true;
+  $("status").textContent = `${h.catalog_items} SKUs loaded · ${h.model}`;
+}).catch(() => {});
+
+$("pick").onclick = () => $("file").click();
+$("file").onchange = async (e) => {
+  for (const f of e.target.files) await addFile(f);
+  e.target.value = "";
+  render();
+};
+
+async function addFile(file) {
+  try {
+    if (file.type === "application/pdf") {
+      state.files.push({ name: file.name, media_type: "application/pdf",
+                         data: await toBase64(file), preview: null });
+      return;
+    }
+    // Re-encode through a canvas: normalizes HEIC (where the browser can decode
+    // it), strips EXIF rotation issues, and downscales huge phone photos.
+    const bmp = await createImageBitmap(file);
+    const scale = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bmp.width * scale);
+    canvas.height = Math.round(bmp.height * scale);
+    canvas.getContext("2d").drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.88);
+    state.files.push({ name: file.name, media_type: "image/jpeg",
+                       data: dataUrl.split(",")[1], preview: dataUrl });
+  } catch {
+    alert(`Couldn't read ${file.name}. If it's a HEIC photo, share/export it as JPEG and try again.`);
+  }
+}
+
+function toBase64(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(",")[1]);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
+function render() {
+  const t = $("thumbs");
+  t.innerHTML = "";
+  state.files.forEach((f, i) => {
+    const d = document.createElement("div");
+    d.className = "thumb";
+    d.innerHTML = f.preview ? `<img src="${f.preview}" alt="">` : `<span>${f.name}</span>`;
+    const x = document.createElement("button");
+    x.className = "x"; x.textContent = "×";
+    x.onclick = () => { state.files.splice(i, 1); render(); };
+    d.appendChild(x);
+    t.appendChild(d);
+  });
+  $("run").disabled = state.files.length === 0;
+}
+
+$("run").onclick = async () => {
+  $("run").disabled = true;
+  $("status").innerHTML = `<span class="spin"></span>Claude is reading the list… (30–90s)`;
+  $("results").hidden = true;
+  try {
+    const headers = { "content-type": "application/json" };
+    const key = $("key").value.trim();
+    const code = $("code").value.trim();
+    if (key) headers["x-user-api-key"] = key;
+    if (code) headers["x-access-code"] = code;
+    const r = await fetch("/api/process", {
+      method: "POST", headers,
+      body: JSON.stringify({
+        files: state.files.map(f => ({ media_type: f.media_type, data: f.data })),
+        notes: $("notes").value,
+      }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+    state.result = data.result;
+    showResult(data);
+    $("status").textContent = "";
+  } catch (err) {
+    $("status").innerHTML = `<span class="err">${escapeHtml(err.message)}</span>`;
+  } finally {
+    $("run").disabled = state.files.length === 0;
+  }
+};
+
+function confBadge(c) {
+  const cls = c >= 0.8 ? "good" : c >= 0.5 ? "mid" : "bad";
+  return `<span class="conf ${cls}">${Math.round(c * 100)}%</span>`;
+}
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"]/g, ch =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+}
+
+function showResult(data) {
+  const res = data.result;
+  $("summary").textContent = res.document_summary;
+  $("meta").textContent = [res.customer, res.project].filter(Boolean).join(" — ");
+  const tbody = $("rows");
+  tbody.innerHTML = "";
+  res.lines.forEach((line, i) => {
+    const tr = document.createElement("tr");
+    const options = [
+      line.matched_sku
+        ? `<option value="${escapeHtml(line.matched_sku)}">${escapeHtml(line.matched_sku)} — ${escapeHtml(line.matched_description || "")}</option>`
+        : `<option value="">— no match —</option>`,
+      ...line.alternates.map(a =>
+        `<option value="${escapeHtml(a.sku)}">${escapeHtml(a.sku)} — ${escapeHtml(a.description)}</option>`),
+      line.matched_sku ? `<option value="">— clear match —</option>` : "",
+    ].join("");
+    tr.innerHTML = `
+      <td><input class="qty" type="number" value="${line.quantity ?? ""}" data-i="${i}"></td>
+      <td>${escapeHtml(line.unit || "")}</td>
+      <td>${escapeHtml(line.interpreted)}<div class="raw">${escapeHtml(line.raw_text)}</div>
+          ${line.note ? `<div class="note">⚠ ${escapeHtml(line.note)}</div>` : ""}</td>
+      <td class="sku"><select data-i="${i}">${options}</select></td>
+      <td>${confBadge(line.confidence)}</td>
+      <td><button class="ghost" data-del="${i}" title="Remove line">×</button></td>`;
+    tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll("input.qty").forEach(inp => inp.addEventListener("change", () => {
+    const line = state.result.lines[Number(inp.dataset.i)];
+    line.quantity = inp.value === "" ? null : Number(inp.value);
+  }));
+  tbody.querySelectorAll("select").forEach(sel => sel.addEventListener("change", () => {
+    const line = state.result.lines[Number(sel.dataset.i)];
+    const alt = line.alternates.find(a => a.sku === sel.value);
+    if (sel.value === "") { line.matched_sku = null; line.matched_description = null; }
+    else if (alt) { line.matched_sku = alt.sku; line.matched_description = alt.description; }
+  }));
+  tbody.querySelectorAll("[data-del]").forEach(btn => btn.addEventListener("click", () => {
+    state.result.lines.splice(Number(btn.dataset.del), 1);
+    showResult(data);
+  }));
+
+  const u = data.usage;
+  const cost = (u.input_tokens * 5 + u.cache_creation_input_tokens * 6.25 +
+                u.cache_read_input_tokens * 0.5 + u.output_tokens * 25) / 1e6;
+  $("usage").textContent =
+    `${u.model} · in ${u.input_tokens} + cached ${u.cache_read_input_tokens} ` +
+    `(wrote ${u.cache_creation_input_tokens}) · out ${u.output_tokens} · ~$${cost.toFixed(2)}`;
+  $("results").hidden = false;
+}
+
+function toCsv() {
+  const rows = [["qty", "unit", "sku", "description", "confidence", "raw_text", "note"]];
+  for (const l of state.result.lines) {
+    rows.push([l.quantity ?? "", l.unit || "", l.matched_sku || "",
+               l.matched_description || l.interpreted, l.confidence,
+               l.raw_text, l.note || ""]);
+  }
+  return rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\r\n");
+}
+$("csv").onclick = () => {
+  const blob = new Blob([toCsv()], { type: "text/csv" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "matched_order.csv";
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+$("copy").onclick = async () => {
+  await navigator.clipboard.writeText(toCsv());
+  $("copy").textContent = "Copied!";
+  setTimeout(() => ($("copy").textContent = "Copy CSV"), 1500);
+};
+</script>
+</body>
+</html>
