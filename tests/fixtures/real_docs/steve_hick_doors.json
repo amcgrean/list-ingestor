@@ -1,0 +1,23 @@
+{
+  "source": "Handwritten white lined paper photo — interior doors and trim",
+  "document_context": {
+    "summary": "Interior door and trim order: prehung 2-panel solid core doors with jambs, bifold doors, pine and MDF trim",
+    "customer_name": "Steve Hick",
+    "project_name": "254 330th St, Perry, IA",
+    "global_material_context": ["2 panel solid core interior doors"],
+    "job_notes": []
+  },
+  "lines": [
+    {"id": "L1", "quantity": 2, "description": "2-8 LH interior door 7 1/4 jamb 2 panel solid core"},
+    {"id": "L2", "quantity": 2, "description": "2-8 RH interior door 4 9/16 jamb 2 panel solid core"},
+    {"id": "L3", "quantity": 1, "description": "2-8 RH interior door 7 1/4 jamb 2 panel solid core"},
+    {"id": "L4", "quantity": 1, "description": "2-8 LH interior door 4 9/16 jamb 2 panel solid core"},
+    {"id": "L5", "quantity": 2, "description": "2-6 bifold door"},
+    {"id": "L6", "quantity": 1, "description": "4-0 bifold door"},
+    {"id": "L7", "quantity": 2, "description": "5-0 bifold door"},
+    {"id": "L8", "quantity": 96, "description": "1x4 pine", "unit": "LF"},
+    {"id": "L9", "quantity": 15, "description": "cove moulding", "unit": "PC"},
+    {"id": "L10", "quantity": 32, "description": "base 4 1/2 MDF flat", "unit": "PC"},
+    {"id": "L11", "quantity": 40, "description": "casing 3 1/2 MDF flat", "unit": "PC"}
+  ]
+}

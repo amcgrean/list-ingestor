@@ -1,0 +1,24 @@
+{
+  "source": "HEIC photo (IMG_9275) — legal pad order note dated 3/11/26",
+  "document_context": {
+    "summary": "Beisser Lumber order: MoistureShield Vantage deck boards in Cape Cod Gray, black textured Westbury C-10 railing sections and posts; pricing request for Gerkin vinyl sliding patio door",
+    "customer_name": "",
+    "project_name": "Beisser Lumber 3/11/26",
+    "global_material_context": [
+      "MoistureShield Vantage decking",
+      "Cape Cod Gray",
+      "black textured Westbury C-10 railings"
+    ],
+    "job_notes": ["2.5\" color match screws marked with a question mark", "tally-mark quantities on railing sections"]
+  },
+  "lines": [
+    {"id": "L1", "quantity": 46, "description": "16' deck boards Cape Cod Gray", "brand": "MoistureShield", "color": "Cape Cod Gray"},
+    {"id": "L2", "quantity": 20, "description": "12' deck boards Cape Cod Gray", "brand": "MoistureShield", "color": "Cape Cod Gray"},
+    {"id": "L3", "quantity": 1, "description": "box 2 1/2\" color match screws", "color": "Cape Cod Gray"},
+    {"id": "L4", "quantity": 5, "description": "8' railing sections black textured Westbury C-10", "brand": "Westbury", "color": "Black"},
+    {"id": "L5", "quantity": 3, "description": "7' railing sections black textured Westbury C-10", "brand": "Westbury", "color": "Black"},
+    {"id": "L6", "quantity": 2, "description": "6' railing sections black textured Westbury C-10", "brand": "Westbury", "color": "Black"},
+    {"id": "L7", "quantity": 7, "description": "2x2 posts (not crossovers) black textured Westbury C-10", "brand": "Westbury", "color": "Black"},
+    {"id": "L8", "quantity": 1, "description": "6' sliding patio door clay color vinyl Gerkin", "brand": "Gerkin", "color": "Clay", "note": "pricing only — not an order line"}
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "source": "Handwritten white paper photo — built-ins / wall paneling by room",
+  "document_context": {
+    "summary": "Interior built-ins and wall paneling for primary bath and bedrooms 2-4: 1/4 inch plywood, primed pine, nickel gap paneling, hook strip",
+    "customer_name": "",
+    "project_name": "",
+    "global_material_context": ["interior built-ins", "primed pine trim"],
+    "job_notes": ["Room breakdown: Primary Bath, Bed 3, Bed 4, Bed 2; totals row used for order"]
+  },
+  "lines": [
+    {"id": "L1", "quantity": 22, "description": "sheets 1/4\" plywood", "section": "TOTALS"},
+    {"id": "L2", "quantity": 23, "description": "1x6 primed pine @ 16ft", "section": "TOTALS"},
+    {"id": "L3", "quantity": 59, "description": "1x4 primed pine @ 16ft", "section": "TOTALS"},
+    {"id": "L4", "quantity": 200, "description": "hook strip", "unit": "LF", "section": "TOTALS"},
+    {"id": "L5", "quantity": 235, "description": "nickel gap", "unit": "SQFT", "section": "Bed 4"},
+    {"id": "L6", "quantity": 66, "description": "nickel gap vanity wall", "unit": "SQFT", "section": "Bed 4 + Bed 2"}
+  ]
+}
