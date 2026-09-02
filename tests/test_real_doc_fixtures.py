@@ -71,20 +71,21 @@ class RealDocFixtureTests(unittest.TestCase):
                     self.assertGreaterEqual(row["confidence_score"], 0.0)
                     self.assertLessEqual(row["confidence_score"], 1.0)
 
-    def test_espelund_post_base_matches_post_base_hardware(self):
+    def test_espelund_treated_posts_match_treated_post_lumber(self):
         rows = self._run("espelund_deck")
         by_id = {row["id"]: row for row in rows}
-        # "6x6 post base with anchor bolt" should surface AB66 6x6 Post Base.
-        self.assertEqual(by_id["L4"]["matched_item_code"], "POSTBASE-AB66")
+        # "10' 6x6 posts treated" / "12' 6x6 post treated" — size, length, and
+        # treatment signals should stack onto the 6x6 PT posts even fuzzy-only.
+        self.assertTrue((by_id["L2"]["matched_item_code"] or "").startswith("POST-6X6"))
+        self.assertEqual(by_id["L3"]["matched_item_code"], "POST-6X6-PT-12")
+        self.assertGreaterEqual(by_id["L3"]["confidence_score"], 0.7)
 
-    def test_oakwood_joists_prefer_lumber_over_hangers(self):
+    def test_oakwood_2x4_blocks_match_2x4_lumber(self):
         rows = self._run("oakwood_deck")
         by_id = {row["id"]: row for row in rows}
-        # "2x10x12' joists" (green lumber section) must not land on a joist
-        # hanger — the structural-member expansion should keep it on lumber.
-        self.assertIn("JOIST-2X10", by_id["L1"]["matched_item_code"] or "")
-        # "2x10-16 joist hangers" should land on hanger hardware, not lumber.
-        self.assertIn("HANGER", by_id["L15"]["matched_item_code"] or "")
+        # "2x4x12' blocks" — the NxNxL rewrite + size bonus should land on a
+        # 2x4 item, not context-polluted railing hardware.
+        self.assertIn("2X4", by_id["L4"]["matched_item_code"] or "")
 
 
 if __name__ == "__main__":

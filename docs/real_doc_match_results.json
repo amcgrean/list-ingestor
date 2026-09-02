@@ -1,0 +1,1409 @@
+{
+  "beisser_moistureshield": [
+    {
+      "id": "L1",
+      "quantity": 46,
+      "raw": "16' deck boards Cape Cod Gray",
+      "enriched_query": "16' deck boards Cape Cod Gray MoistureShield Vantage decking, Cape Cod Gray, black textured Westbury C-10 railings 2.5\" color match screws marked with a question mark, tally-mark quantities on railing sections treated exterior pressure treated",
+      "matched_item_code": "DECK-2X6-PT",
+      "matched_description": "2x6 Pressure Treated Decking 16ft",
+      "confidence_score": 0.5236,
+      "fuzzy_score": 0.5455,
+      "vector_score": 0.5756,
+      "runner_up": {
+        "sku": "SCREW-DECK-2.5B",
+        "confidence_score": 0.4696
+      }
+    },
+    {
+      "id": "L2",
+      "quantity": 20,
+      "raw": "12' deck boards Cape Cod Gray",
+      "enriched_query": "12' deck boards Cape Cod Gray MoistureShield Vantage decking, Cape Cod Gray, black textured Westbury C-10 railings 2.5\" color match screws marked with a question mark, tally-mark quantities on railing sections treated exterior pressure treated",
+      "matched_item_code": "DECK-2X6-PT",
+      "matched_description": "2x6 Pressure Treated Decking 16ft",
+      "confidence_score": 0.5155,
+      "fuzzy_score": 0.5455,
+      "vector_score": 0.5621,
+      "runner_up": {
+        "sku": "SCREW-DECK-2.5B",
+        "confidence_score": 0.4692
+      }
+    },
+    {
+      "id": "L3",
+      "quantity": 1,
+      "raw": "box 2 1/2\" color match screws",
+      "enriched_query": "box 2 1/2\" color match screws MoistureShield Vantage decking, Cape Cod Gray, black textured Westbury C-10 railings 2.5\" color match screws marked with a question mark, tally-mark quantities on railing sections treated exterior pressure treated",
+      "matched_item_code": "SCREW-DECK-2.5B",
+      "matched_description": "2.5in Bronze Deck Screws 1lb Box",
+      "confidence_score": 0.6054,
+      "fuzzy_score": 0.3533,
+      "vector_score": 0.6735,
+      "runner_up": {
+        "sku": "SCREW-DECK-2.5S",
+        "confidence_score": 0.5965
+      }
+    },
+    {
+      "id": "L4",
+      "quantity": 5,
+      "raw": "8' railing sections black textured Westbury C-10",
+      "enriched_query": "8' railing sections black textured Westbury C-10 MoistureShield Vantage decking, Cape Cod Gray, black textured Westbury C-10 railings 2.5\" color match screws marked with a question mark, tally-mark quantities on railing sections treated exterior pressure treated",
+      "matched_item_code": "RAIL-POST-4X4",
+      "matched_description": "4x4 Railing Post Pressure Treated",
+      "confidence_score": 0.4852,
+      "fuzzy_score": 0.4706,
+      "vector_score": 0.5617,
+      "runner_up": {
+        "sku": "RAIL-2X4-PT",
+        "confidence_score": 0.4548
+      }
+    },
+    {
+      "id": "L5",
+      "quantity": 3,
+      "raw": "7' railing sections black textured Westbury C-10",
+      "enriched_query": "7' railing sections black textured Westbury C-10 MoistureShield Vantage decking, Cape Cod Gray, black textured Westbury C-10 railings 2.5\" color match screws marked with a question mark, tally-mark quantities on railing sections treated exterior pressure treated",
+      "matched_item_code": "RAIL-POST-4X4",
+      "matched_description": "4x4 Railing Post Pressure Treated",
+      "confidence_score": 0.4833,
+      "fuzzy_score": 0.4706,
+      "vector_score": 0.5584,
+      "runner_up": {
+        "sku": "RAIL-2X4-PT",
+        "confidence_score": 0.444
+      }
+    },
+    {
+      "id": "L6",
+      "quantity": 2,
+      "raw": "6' railing sections black textured Westbury C-10",
+      "enriched_query": "6' railing sections black textured Westbury C-10 MoistureShield Vantage decking, Cape Cod Gray, black textured Westbury C-10 railings 2.5\" color match screws marked with a question mark, tally-mark quantities on railing sections treated exterior pressure treated",
+      "matched_item_code": "RAIL-POST-4X4",
+      "matched_description": "4x4 Railing Post Pressure Treated",
+      "confidence_score": 0.4861,
+      "fuzzy_score": 0.4706,
+      "vector_score": 0.5631,
+      "runner_up": {
+        "sku": "RAIL-2X4-PT",
+        "confidence_score": 0.4451
+      }
+    },
+    {
+      "id": "L7",
+      "quantity": 7,
+      "raw": "2x2 posts (not crossovers) black textured Westbury C-10",
+      "enriched_query": "2x2 posts (not crossovers) black textured Westbury C-10 MoistureShield Vantage decking, Cape Cod Gray, black textured Westbury C-10 railings 2.5\" color match screws marked with a question mark, tally-mark quantities on railing sections treated exterior pressure treated",
+      "matched_item_code": "RAIL-POST-4X4",
+      "matched_description": "4x4 Railing Post Pressure Treated",
+      "confidence_score": 0.4222,
+      "fuzzy_score": 0.4706,
+      "vector_score": 0.5899,
+      "runner_up": {
+        "sku": "POST-6X6-PT",
+        "confidence_score": 0.4113
+      }
+    },
+    {
+      "id": "L8",
+      "quantity": 1,
+      "raw": "6' sliding patio door clay color vinyl Gerkin",
+      "enriched_query": "6' sliding patio door clay color vinyl Gerkin MoistureShield Vantage decking, Cape Cod Gray, black textured Westbury C-10 railings 2.5\" color match screws marked with a question mark, tally-mark quantities on railing sections treated exterior pressure treated",
+      "matched_item_code": "RAIL-POST-4X4",
+      "matched_description": "4x4 Railing Post Pressure Treated",
+      "confidence_score": 0.4275,
+      "fuzzy_score": 0.4706,
+      "vector_score": 0.4655,
+      "runner_up": {
+        "sku": "SCREW-DECK-2.5B",
+        "confidence_score": 0.4123
+      }
+    }
+  ],
+  "builtins_rooms": [
+    {
+      "id": "L1",
+      "quantity": 22,
+      "raw": "sheets 1/4\" plywood",
+      "enriched_query": "TOTALS sheets 1/4\" plywood interior built-ins, primed pine trim Room breakdown: Primary Bath, Bed 3, Bed 4, Bed 2; totals row used for order spf fir spruce pine fir",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.3691,
+      "fuzzy_score": 0.3509,
+      "vector_score": 0.3812,
+      "runner_up": {
+        "sku": "JOIST-2X10-SPF",
+        "confidence_score": 0.2258
+      }
+    },
+    {
+      "id": "L2",
+      "quantity": 23,
+      "raw": "1x6 primed pine @ 16ft",
+      "enriched_query": "TOTALS 1x6 primed pine @ 16ft interior built-ins, primed pine trim Room breakdown: Primary Bath, Bed 3, Bed 4, Bed 2; totals row used for order spf fir spruce pine fir",
+      "matched_item_code": "BOARD-1X6-SPF",
+      "matched_description": "1x6 SPF Board 16ft",
+      "confidence_score": 0.5538,
+      "fuzzy_score": 0.3478,
+      "vector_score": 0.4579,
+      "runner_up": {
+        "sku": "JOIST-2X10-SPF",
+        "confidence_score": 0.4047
+      }
+    },
+    {
+      "id": "L3",
+      "quantity": 59,
+      "raw": "1x4 primed pine @ 16ft",
+      "enriched_query": "TOTALS 1x4 primed pine @ 16ft interior built-ins, primed pine trim Room breakdown: Primary Bath, Bed 3, Bed 4, Bed 2; totals row used for order spf fir spruce pine fir",
+      "matched_item_code": "BOARD-1X4-SPF",
+      "matched_description": "1x4 SPF Board 8ft",
+      "confidence_score": 0.4434,
+      "fuzzy_score": 0.2747,
+      "vector_score": 0.4559,
+      "runner_up": {
+        "sku": "JOIST-2X10-SPF",
+        "confidence_score": 0.4028
+      }
+    },
+    {
+      "id": "L4",
+      "quantity": 200,
+      "raw": "hook strip",
+      "enriched_query": "TOTALS hook strip interior built-ins, primed pine trim Room breakdown: Primary Bath, Bed 3, Bed 4, Bed 2; totals row used for order spf fir spruce pine fir",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.3577,
+      "fuzzy_score": 0.3653,
+      "vector_score": 0.3526,
+      "runner_up": {
+        "sku": "JOIST-2X10-SPF",
+        "confidence_score": 0.2822
+      }
+    },
+    {
+      "id": "L5",
+      "quantity": 235,
+      "raw": "nickel gap",
+      "enriched_query": "Bed 4 nickel gap interior built-ins, primed pine trim Room breakdown: Primary Bath, Bed 3, Bed 4, Bed 2; totals row used for order spf fir spruce pine fir",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.352,
+      "fuzzy_score": 0.362,
+      "vector_score": 0.3453,
+      "runner_up": {
+        "sku": "JOIST-2X10-SPF",
+        "confidence_score": 0.2786
+      }
+    },
+    {
+      "id": "L6",
+      "quantity": 66,
+      "raw": "nickel gap vanity wall",
+      "enriched_query": "Bed 4 + Bed 2 nickel gap vanity wall interior built-ins, primed pine trim Room breakdown: Primary Bath, Bed 3, Bed 4, Bed 2; totals row used for order spf fir spruce pine fir",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.3309,
+      "fuzzy_score": 0.3376,
+      "vector_score": 0.3264,
+      "runner_up": {
+        "sku": "JOIST-2X10-SPF",
+        "confidence_score": 0.2573
+      }
+    }
+  ],
+  "earl_trim_boards": [
+    {
+      "id": "L1",
+      "quantity": 24,
+      "raw": "4\" trim board 5/4 white smooth",
+      "enriched_query": "4\" trim board 5/4 white smooth Trim boards 5/4 white smooth",
+      "matched_item_code": "BOARD-1X4-SPF",
+      "matched_description": "1x4 SPF Board 8ft",
+      "confidence_score": 0.3965,
+      "fuzzy_score": 0.4658,
+      "vector_score": 0.4836,
+      "runner_up": {
+        "sku": "BOARD-1X6-SPF",
+        "confidence_score": 0.3628
+      }
+    },
+    {
+      "id": "L2",
+      "quantity": 12,
+      "raw": "6\" trim board 5/4 white smooth",
+      "enriched_query": "6\" trim board 5/4 white smooth Trim boards 5/4 white smooth",
+      "matched_item_code": "BOARD-1X6-SPF",
+      "matched_description": "1x6 SPF Board 16ft",
+      "confidence_score": 0.3912,
+      "fuzzy_score": 0.4533,
+      "vector_score": 0.4832,
+      "runner_up": {
+        "sku": "BOARD-1X4-SPF",
+        "confidence_score": 0.3893
+      }
+    },
+    {
+      "id": "L3",
+      "quantity": 12,
+      "raw": "8\" trim board 5/4 white smooth",
+      "enriched_query": "8\" trim board 5/4 white smooth Trim boards 5/4 white smooth",
+      "matched_item_code": "BOARD-1X4-SPF",
+      "matched_description": "1x4 SPF Board 8ft",
+      "confidence_score": 0.4265,
+      "fuzzy_score": 0.4932,
+      "vector_score": 0.5154,
+      "runner_up": {
+        "sku": "BOARD-1X6-SPF",
+        "confidence_score": 0.3735
+      }
+    },
+    {
+      "id": "L4",
+      "quantity": 3,
+      "raw": "smooth Hardie plank 8\"",
+      "enriched_query": "smooth Hardie plank 8\" Trim boards 5/4 white smooth",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.3141,
+      "fuzzy_score": 0.3248,
+      "vector_score": 0.3069,
+      "runner_up": {
+        "sku": "BOARD-1X4-SPF",
+        "confidence_score": 0.3085
+      }
+    },
+    {
+      "id": "L5",
+      "quantity": 12,
+      "raw": "4x10' sheets white cedar mill",
+      "enriched_query": "4x10' sheets white cedar mill Trim boards 5/4 white smooth",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.353,
+      "fuzzy_score": 0.336,
+      "vector_score": 0.3643,
+      "runner_up": {
+        "sku": "BOARD-1X4-SPF",
+        "confidence_score": 0.2315
+      }
+    },
+    {
+      "id": "L6",
+      "quantity": 16,
+      "raw": "battens white",
+      "enriched_query": "battens white Trim boards 5/4 white smooth",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.3336,
+      "fuzzy_score": 0.3303,
+      "vector_score": 0.3358,
+      "runner_up": {
+        "sku": "BALUSTER-ALUM",
+        "confidence_score": 0.2819
+      }
+    },
+    {
+      "id": "L7",
+      "quantity": 1,
+      "raw": "case caulk white",
+      "enriched_query": "case caulk white Trim boards 5/4 white smooth",
+      "matched_item_code": "BALUSTER-ALUM",
+      "matched_description": "Aluminum Baluster 32in Black",
+      "confidence_score": 0.2716,
+      "fuzzy_score": 0.3115,
+      "vector_score": 0.245,
+      "runner_up": {
+        "sku": "CLIP-DECK-TREX",
+        "confidence_score": 0.2684
+      }
+    },
+    {
+      "id": "L8",
+      "quantity": 1,
+      "raw": "black vented soffit",
+      "enriched_query": "black vented soffit Trim boards 5/4 white smooth",
+      "matched_item_code": "BALUSTER-ALUM",
+      "matched_description": "Aluminum Baluster 32in Black",
+      "confidence_score": 0.3527,
+      "fuzzy_score": 0.3511,
+      "vector_score": 0.3538,
+      "runner_up": {
+        "sku": "BALUSTER-WOOD",
+        "confidence_score": 0.3031
+      }
+    }
+  ],
+  "espelund_deck": [
+    {
+      "id": "L1",
+      "quantity": 6,
+      "raw": "bags concrete",
+      "enriched_query": "bags concrete TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.4979,
+      "fuzzy_score": 0.4036,
+      "vector_score": 0.5607,
+      "runner_up": {
+        "sku": "TREX-16-SAND",
+        "confidence_score": 0.4832
+      }
+    },
+    {
+      "id": "L2",
+      "quantity": 15,
+      "raw": "10' 6x6 posts treated",
+      "enriched_query": "10' 6x6 posts treated TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "POST-6X6-PT",
+      "matched_description": "6x6 Pressure Treated Post 10ft",
+      "confidence_score": 0.8633,
+      "fuzzy_score": 0.4706,
+      "vector_score": 0.6917,
+      "runner_up": {
+        "sku": "POST-6X6-PT-12",
+        "confidence_score": 0.7789
+      }
+    },
+    {
+      "id": "L3",
+      "quantity": 1,
+      "raw": "12' 6x6 post treated",
+      "enriched_query": "12' 6x6 post treated TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "POST-6X6-PT-12",
+      "matched_description": "6x6 Pressure Treated Post 12ft",
+      "confidence_score": 0.8887,
+      "fuzzy_score": 0.5556,
+      "vector_score": 0.6774,
+      "runner_up": {
+        "sku": "POST-6X6-PT",
+        "confidence_score": 0.7971
+      }
+    },
+    {
+      "id": "L4",
+      "quantity": 15,
+      "raw": "6x6 post base with anchor bolt",
+      "enriched_query": "6x6 post base with anchor bolt TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "POST-6X6-PT",
+      "matched_description": "6x6 Pressure Treated Post 10ft",
+      "confidence_score": 0.7957,
+      "fuzzy_score": 0.5556,
+      "vector_score": 0.6558,
+      "runner_up": {
+        "sku": "POST-6X6-PT-12",
+        "confidence_score": 0.7953
+      }
+    },
+    {
+      "id": "L5",
+      "quantity": 11,
+      "raw": "16' 1 3/4 x 12 LVL",
+      "enriched_query": "16' 1 3/4 x 12 LVL TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "TREX-16-SAND",
+      "matched_description": "Trex Select Decking 16ft Sandy Tan",
+      "confidence_score": 0.5868,
+      "fuzzy_score": 0.376,
+      "vector_score": 0.594,
+      "runner_up": {
+        "sku": "BALUSTER-WOOD",
+        "confidence_score": 0.5557
+      }
+    },
+    {
+      "id": "L6",
+      "quantity": 28,
+      "raw": "22' 12\" I joists",
+      "enriched_query": "22' 12\" I joists TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.5852,
+      "fuzzy_score": 0.3966,
+      "vector_score": 0.711,
+      "runner_up": {
+        "sku": "TREX-16-SAND",
+        "confidence_score": 0.529
+      }
+    },
+    {
+      "id": "L7",
+      "quantity": 10,
+      "raw": "16' 12\" I joists",
+      "enriched_query": "16' 12\" I joists TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "TREX-16-SAND",
+      "matched_description": "Trex Select Decking 16ft Sandy Tan",
+      "confidence_score": 0.6209,
+      "fuzzy_score": 0.3761,
+      "vector_score": 0.6507,
+      "runner_up": {
+        "sku": "TREX-16-CLAM",
+        "confidence_score": 0.5924
+      }
+    },
+    {
+      "id": "L8",
+      "quantity": 8,
+      "raw": "1 1/8 x 12\" rim board",
+      "enriched_query": "1 1/8 x 12\" rim board TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.5276,
+      "fuzzy_score": 0.3665,
+      "vector_score": 0.635,
+      "runner_up": {
+        "sku": "TREX-16-SAND",
+        "confidence_score": 0.4576
+      }
+    },
+    {
+      "id": "L9",
+      "quantity": 14,
+      "raw": "16' 2x4 white wood",
+      "enriched_query": "16' 2x4 white wood TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "RAIL-2X4-PT",
+      "matched_description": "2x4 Pressure Treated Rail 8ft",
+      "confidence_score": 0.7508,
+      "fuzzy_score": 0.4819,
+      "vector_score": 0.63,
+      "runner_up": {
+        "sku": "TREX-16-SAND",
+        "confidence_score": 0.6093
+      }
+    },
+    {
+      "id": "L10",
+      "quantity": 12,
+      "raw": "12' 2x10",
+      "enriched_query": "Treated Materials 12' 2x10 TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "POST-6X6-PT-12",
+      "matched_description": "6x6 Pressure Treated Post 12ft",
+      "confidence_score": 0.5013,
+      "fuzzy_score": 0.4182,
+      "vector_score": 0.5566,
+      "runner_up": {
+        "sku": "BALUSTER-WOOD",
+        "confidence_score": 0.4969
+      }
+    },
+    {
+      "id": "L11",
+      "quantity": 3,
+      "raw": "10' 2x10",
+      "enriched_query": "Treated Materials 10' 2x10 TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.4952,
+      "fuzzy_score": 0.3947,
+      "vector_score": 0.5623,
+      "runner_up": {
+        "sku": "TREX-16-SAND",
+        "confidence_score": 0.4883
+      }
+    },
+    {
+      "id": "L12",
+      "quantity": 10,
+      "raw": "16' 2x12",
+      "enriched_query": "Treated Materials 16' 2x12 TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "TREX-16-SAND",
+      "matched_description": "Trex Select Decking 16ft Sandy Tan",
+      "confidence_score": 0.5756,
+      "fuzzy_score": 0.3913,
+      "vector_score": 0.5651,
+      "runner_up": {
+        "sku": "DECK-2X6-PT",
+        "confidence_score": 0.5585
+      }
+    },
+    {
+      "id": "L13",
+      "quantity": 3,
+      "raw": "12' 2x4",
+      "enriched_query": "Treated Materials 12' 2x4 TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "RAIL-2X4-PT",
+      "matched_description": "2x4 Pressure Treated Rail 8ft",
+      "confidence_score": 0.7212,
+      "fuzzy_score": 0.4819,
+      "vector_score": 0.5808,
+      "runner_up": {
+        "sku": "POST-6X6-PT-12",
+        "confidence_score": 0.4983
+      }
+    },
+    {
+      "id": "L14",
+      "quantity": 100,
+      "raw": "H2.5 hurricane ties",
+      "enriched_query": "H2.5 hurricane ties TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.4611,
+      "fuzzy_score": 0.373,
+      "vector_score": 0.5199,
+      "runner_up": {
+        "sku": "TREX-16-SAND",
+        "confidence_score": 0.4433
+      }
+    },
+    {
+      "id": "L15",
+      "quantity": 20,
+      "raw": "I joist hangers",
+      "enriched_query": "I joist hangers TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.5125,
+      "fuzzy_score": 0.3879,
+      "vector_score": 0.5955,
+      "runner_up": {
+        "sku": "TREX-16-SAND",
+        "confidence_score": 0.4798
+      }
+    },
+    {
+      "id": "L16",
+      "quantity": 25,
+      "raw": "T25 x 3\" deck screws",
+      "enriched_query": "T25 x 3\" deck screws TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.5306,
+      "fuzzy_score": 0.3948,
+      "vector_score": 0.6211,
+      "runner_up": {
+        "sku": "SCREW-DECK-3",
+        "confidence_score": 0.5101
+      }
+    },
+    {
+      "id": "L17",
+      "quantity": 2,
+      "raw": "box (48 pieces) 6 1/4\" thru locks",
+      "enriched_query": "box (48 pieces) 6 1/4\" thru locks TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.4938,
+      "fuzzy_score": 0.3383,
+      "vector_score": 0.5975,
+      "runner_up": {
+        "sku": "SCREW-DECK-3",
+        "confidence_score": 0.4396
+      }
+    },
+    {
+      "id": "L18",
+      "quantity": 2,
+      "raw": "boxes 3 5/8 ledger locks",
+      "enriched_query": "boxes 3 5/8 ledger locks TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.4895,
+      "fuzzy_score": 0.3725,
+      "vector_score": 0.5675,
+      "runner_up": {
+        "sku": "SCREW-DECK-3",
+        "confidence_score": 0.4598
+      }
+    },
+    {
+      "id": "L19",
+      "quantity": 1100,
+      "raw": "hidden fasteners",
+      "enriched_query": "TimberTech Antique Leather hidden fasteners TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.4492,
+      "fuzzy_score": 0.4,
+      "vector_score": 0.5487,
+      "runner_up": {
+        "sku": "TREX-16-SAND",
+        "confidence_score": 0.4416
+      }
+    },
+    {
+      "id": "L20",
+      "quantity": 14,
+      "raw": "20' solid deck boards",
+      "enriched_query": "TimberTech Antique Leather 20' solid deck boards TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "TREX-20-PEBB",
+      "matched_description": "Trex Select Decking 20ft Pebble Grey",
+      "confidence_score": 0.5702,
+      "fuzzy_score": 0.4268,
+      "vector_score": 0.5992,
+      "runner_up": {
+        "sku": "BALUSTER-WOOD",
+        "confidence_score": 0.5023
+      }
+    },
+    {
+      "id": "L21",
+      "quantity": 12,
+      "raw": "16' solid deck boards",
+      "enriched_query": "TimberTech Antique Leather 16' solid deck boards TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "TREX-16-SAND",
+      "matched_description": "Trex Select Decking 16ft Sandy Tan",
+      "confidence_score": 0.5886,
+      "fuzzy_score": 0.434,
+      "vector_score": 0.6251,
+      "runner_up": {
+        "sku": "DECK-2X6-PT",
+        "confidence_score": 0.5642
+      }
+    },
+    {
+      "id": "L22",
+      "quantity": 13,
+      "raw": "20' grooved deck boards",
+      "enriched_query": "TimberTech Antique Leather 20' grooved deck boards TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "TREX-20-PEBB",
+      "matched_description": "Trex Select Decking 20ft Pebble Grey",
+      "confidence_score": 0.564,
+      "fuzzy_score": 0.4232,
+      "vector_score": 0.5913,
+      "runner_up": {
+        "sku": "BALUSTER-WOOD",
+        "confidence_score": 0.5091
+      }
+    },
+    {
+      "id": "L23",
+      "quantity": 135,
+      "raw": "16' grooved deck boards",
+      "enriched_query": "TimberTech Antique Leather 16' grooved deck boards TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "TREX-16-SAND",
+      "matched_description": "Trex Select Decking 16ft Sandy Tan",
+      "confidence_score": 0.5812,
+      "fuzzy_score": 0.4304,
+      "vector_score": 0.6151,
+      "runner_up": {
+        "sku": "DECK-2X6-PT",
+        "confidence_score": 0.5605
+      }
+    },
+    {
+      "id": "L24",
+      "quantity": 5,
+      "raw": "1x12 fascia",
+      "enriched_query": "TimberTech Antique Leather 1x12 fascia TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.4751,
+      "fuzzy_score": 0.4072,
+      "vector_score": 0.587,
+      "runner_up": {
+        "sku": "TREX-16-SAND",
+        "confidence_score": 0.4553
+      }
+    },
+    {
+      "id": "L25",
+      "quantity": 19,
+      "raw": "1x8 fascia",
+      "enriched_query": "TimberTech Antique Leather 1x8 fascia TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.473,
+      "fuzzy_score": 0.4,
+      "vector_score": 0.5883,
+      "runner_up": {
+        "sku": "TREX-16-SAND",
+        "confidence_score": 0.4567
+      }
+    },
+    {
+      "id": "L26",
+      "quantity": 4,
+      "raw": "boxes color match deck screws (Trapeze brand)",
+      "enriched_query": "boxes color match deck screws (Trapeze brand) TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.4495,
+      "fuzzy_score": 0.3798,
+      "vector_score": 0.5626,
+      "runner_up": {
+        "sku": "SCREW-DECK-3",
+        "confidence_score": 0.4445
+      }
+    },
+    {
+      "id": "L27",
+      "quantity": 3,
+      "raw": "boxes fascia screws",
+      "enriched_query": "boxes fascia screws TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "SCREW-DECK-3",
+      "matched_description": "3in Deck Screws 1lb Box",
+      "confidence_score": 0.4802,
+      "fuzzy_score": 0.3602,
+      "vector_score": 0.5602,
+      "runner_up": {
+        "sku": "BALUSTER-WOOD",
+        "confidence_score": 0.4748
+      }
+    },
+    {
+      "id": "L28",
+      "quantity": 12,
+      "raw": "47\" posts",
+      "enriched_query": "Black Westbury C10 47\" posts TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.4982,
+      "fuzzy_score": 0.3927,
+      "vector_score": 0.6352,
+      "runner_up": {
+        "sku": "TREX-16-SAND",
+        "confidence_score": 0.4682
+      }
+    },
+    {
+      "id": "L29",
+      "quantity": 12,
+      "raw": "37\" posts",
+      "enriched_query": "Black Westbury C10 37\" posts TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.5015,
+      "fuzzy_score": 0.4018,
+      "vector_score": 0.6346,
+      "runner_up": {
+        "sku": "TREX-16-SAND",
+        "confidence_score": 0.468
+      }
+    },
+    {
+      "id": "L30",
+      "quantity": 5,
+      "raw": "8' stair railing",
+      "enriched_query": "Black Westbury C10 8' stair railing TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.494,
+      "fuzzy_score": 0.3982,
+      "vector_score": 0.6246,
+      "runner_up": {
+        "sku": "RAIL-2X4-PT",
+        "confidence_score": 0.4671
+      }
+    },
+    {
+      "id": "L31",
+      "quantity": 10,
+      "raw": "8' level rail",
+      "enriched_query": "Black Westbury C10 8' level rail TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "RAIL-2X4-PT",
+      "matched_description": "2x4 Pressure Treated Rail 8ft",
+      "confidence_score": 0.5229,
+      "fuzzy_score": 0.5,
+      "vector_score": 0.6048,
+      "runner_up": {
+        "sku": "BALUSTER-WOOD",
+        "confidence_score": 0.4956
+      }
+    },
+    {
+      "id": "L32",
+      "quantity": 4,
+      "raw": "6' level rail",
+      "enriched_query": "Black Westbury C10 6' level rail TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.4975,
+      "fuzzy_score": 0.3946,
+      "vector_score": 0.6328,
+      "runner_up": {
+        "sku": "TREX-16-SAND",
+        "confidence_score": 0.4626
+      }
+    },
+    {
+      "id": "L33",
+      "quantity": 2,
+      "raw": "extra sets wall mount brackets",
+      "enriched_query": "Black Westbury C10 extra sets wall mount brackets TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.4891,
+      "fuzzy_score": 0.3833,
+      "vector_score": 0.5596,
+      "runner_up": {
+        "sku": "TREX-16-SAND",
+        "confidence_score": 0.4746
+      }
+    },
+    {
+      "id": "L34",
+      "quantity": 75,
+      "raw": "downspouts",
+      "enriched_query": "Trex RainEscapes downspouts TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "TREX-16-SAND",
+      "matched_description": "Trex Select Decking 16ft Sandy Tan",
+      "confidence_score": 0.6442,
+      "fuzzy_score": 0.3846,
+      "vector_score": 0.6505,
+      "runner_up": {
+        "sku": "TREX-20-PEBB",
+        "confidence_score": 0.6054
+      }
+    },
+    {
+      "id": "L35",
+      "quantity": 62,
+      "raw": "12' drainage trough",
+      "enriched_query": "Trex RainEscapes 12' drainage trough TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "TREX-12-GRAVEL",
+      "matched_description": "Trex Select Decking 12ft Gravel Path",
+      "confidence_score": 0.7021,
+      "fuzzy_score": 0.3967,
+      "vector_score": 0.6057,
+      "runner_up": {
+        "sku": "TREX-16-SAND",
+        "confidence_score": 0.6342
+      }
+    },
+    {
+      "id": "L36",
+      "quantity": 10,
+      "raw": "16' drainage trough",
+      "enriched_query": "Trex RainEscapes 16' drainage trough TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "TREX-16-SAND",
+      "matched_description": "Trex Select Decking 16ft Sandy Tan",
+      "confidence_score": 0.7233,
+      "fuzzy_score": 0.3951,
+      "vector_score": 0.642,
+      "runner_up": {
+        "sku": "TREX-16-CLAM",
+        "confidence_score": 0.6873
+      }
+    },
+    {
+      "id": "L37",
+      "quantity": 24,
+      "raw": "butyl tape",
+      "enriched_query": "Trex RainEscapes butyl tape TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "TREX-16-SAND",
+      "matched_description": "Trex Select Decking 16ft Sandy Tan",
+      "confidence_score": 0.5289,
+      "fuzzy_score": 0.3675,
+      "vector_score": 0.6365,
+      "runner_up": {
+        "sku": "TREX-16-CLAM",
+        "confidence_score": 0.4942
+      }
+    },
+    {
+      "id": "L38",
+      "quantity": 48,
+      "raw": "8\" textured siding",
+      "enriched_query": "LP 8\" textured siding TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.4606,
+      "fuzzy_score": 0.3475,
+      "vector_score": 0.5359,
+      "runner_up": {
+        "sku": "RAIL-2X4-PT",
+        "confidence_score": 0.4573
+      }
+    },
+    {
+      "id": "L39",
+      "quantity": 32,
+      "raw": "4x8 sheets",
+      "enriched_query": "LP 4x8 sheets TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.4678,
+      "fuzzy_score": 0.3586,
+      "vector_score": 0.5405,
+      "runner_up": {
+        "sku": "TREX-16-SAND",
+        "confidence_score": 0.4527
+      }
+    },
+    {
+      "id": "L40",
+      "quantity": 16,
+      "raw": "limestone Vulkem",
+      "enriched_query": "limestone Vulkem TimberTech Antique Leather decking, All Trex RainEscapes, Black Westbury C10 railing, 27x21 storage under deck treated exterior pressure treated",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.5053,
+      "fuzzy_score": 0.4071,
+      "vector_score": 0.5708,
+      "runner_up": {
+        "sku": "TREX-16-SAND",
+        "confidence_score": 0.4964
+      }
+    }
+  ],
+  "oakwood_deck": [
+    {
+      "id": "L1",
+      "quantity": 13,
+      "raw": "2x10x12' joists",
+      "enriched_query": "Green lumber 2x10x12' joists Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "POST-6X6-PT-12",
+      "matched_description": "6x6 Pressure Treated Post 12ft",
+      "confidence_score": 0.5246,
+      "fuzzy_score": 0.3951,
+      "vector_score": 0.611,
+      "runner_up": {
+        "sku": "BALUSTER-WOOD",
+        "confidence_score": 0.5016
+      }
+    },
+    {
+      "id": "L2",
+      "quantity": 2,
+      "raw": "2x10x16' ledger / stair treads",
+      "enriched_query": "Green lumber 2x10x16' ledger / stair treads Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "DECK-2X6-PT",
+      "matched_description": "2x6 Pressure Treated Decking 16ft",
+      "confidence_score": 0.5163,
+      "fuzzy_score": 0.4,
+      "vector_score": 0.5939,
+      "runner_up": {
+        "sku": "BALUSTER-WOOD",
+        "confidence_score": 0.4994
+      }
+    },
+    {
+      "id": "L3",
+      "quantity": 3,
+      "raw": "2x12x16' beam / stringers",
+      "enriched_query": "Green lumber 2x12x16' beam / stringers Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "BEAM-4X8-PT",
+      "matched_description": "4x8 Pressure Treated Beam 16ft",
+      "confidence_score": 0.5771,
+      "fuzzy_score": 0.4884,
+      "vector_score": 0.6363,
+      "runner_up": {
+        "sku": "BEAM-6X8-PT",
+        "confidence_score": 0.5767
+      }
+    },
+    {
+      "id": "L4",
+      "quantity": 2,
+      "raw": "2x4x12' blocks",
+      "enriched_query": "Green lumber 2x4x12' blocks Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "RAIL-2X4-PT",
+      "matched_description": "2x4 Pressure Treated Rail 8ft",
+      "confidence_score": 0.776,
+      "fuzzy_score": 0.5682,
+      "vector_score": 0.6145,
+      "runner_up": {
+        "sku": "POST-6X6-PT-12",
+        "confidence_score": 0.5106
+      }
+    },
+    {
+      "id": "L5",
+      "quantity": 2,
+      "raw": "2x6x12' backer",
+      "enriched_query": "Green lumber 2x6x12' backer Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "DECK-2X6-PT",
+      "matched_description": "2x6 Pressure Treated Decking 16ft",
+      "confidence_score": 0.735,
+      "fuzzy_score": 0.4762,
+      "vector_score": 0.6075,
+      "runner_up": {
+        "sku": "POST-6X6-PT-12",
+        "confidence_score": 0.5198
+      }
+    },
+    {
+      "id": "L6",
+      "quantity": 2,
+      "raw": "2x10x10' post backer",
+      "enriched_query": "Green lumber 2x10x10' post backer Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "POST-4X4-PT-10",
+      "matched_description": "4x4 Pressure Treated Post 10ft",
+      "confidence_score": 0.5739,
+      "fuzzy_score": 0.4884,
+      "vector_score": 0.6308,
+      "runner_up": {
+        "sku": "POST-6X6-PT",
+        "confidence_score": 0.5707
+      }
+    },
+    {
+      "id": "L7",
+      "quantity": 2,
+      "raw": "vinyl drip cap",
+      "enriched_query": "Green lumber vinyl drip cap Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "RAIL-2X4-PT",
+      "matched_description": "2x4 Pressure Treated Rail 8ft",
+      "confidence_score": 0.4908,
+      "fuzzy_score": 0.5,
+      "vector_score": 0.4846,
+      "runner_up": {
+        "sku": "RAIL-POST-4X4",
+        "confidence_score": 0.4591
+      }
+    },
+    {
+      "id": "L8",
+      "quantity": 6,
+      "raw": "12\" fascia",
+      "enriched_query": "Deck Material 12\" fascia Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "RAIL-2X4-PT",
+      "matched_description": "2x4 Pressure Treated Rail 8ft",
+      "confidence_score": 0.4743,
+      "fuzzy_score": 0.5,
+      "vector_score": 0.5238,
+      "runner_up": {
+        "sku": "BALUSTER-WOOD",
+        "confidence_score": 0.4566
+      }
+    },
+    {
+      "id": "L9",
+      "quantity": 2,
+      "raw": "7\" riser",
+      "enriched_query": "Deck Material 7\" riser Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "RAIL-2X4-PT",
+      "matched_description": "2x4 Pressure Treated Rail 8ft",
+      "confidence_score": 0.4703,
+      "fuzzy_score": 0.5,
+      "vector_score": 0.5172,
+      "runner_up": {
+        "sku": "BALUSTER-WOOD",
+        "confidence_score": 0.4559
+      }
+    },
+    {
+      "id": "L10",
+      "quantity": 8,
+      "raw": "no groove deck boards 16' (picture frame / stairs / wine cap)",
+      "enriched_query": "Deck Material no groove deck boards 16' (picture frame / stairs / wine cap) Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "DECK-2X6-PT",
+      "matched_description": "2x6 Pressure Treated Decking 16ft",
+      "confidence_score": 0.5209,
+      "fuzzy_score": 0.5455,
+      "vector_score": 0.5712,
+      "runner_up": {
+        "sku": "BALUSTER-WOOD",
+        "confidence_score": 0.4785
+      }
+    },
+    {
+      "id": "L11",
+      "quantity": 26,
+      "raw": "grooved deck boards 16'",
+      "enriched_query": "Deck Material grooved deck boards 16' Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "DECK-2X6-PT",
+      "matched_description": "2x6 Pressure Treated Decking 16ft",
+      "confidence_score": 0.5308,
+      "fuzzy_score": 0.5455,
+      "vector_score": 0.5877,
+      "runner_up": {
+        "sku": "BALUSTER-WOOD",
+        "confidence_score": 0.4631
+      }
+    },
+    {
+      "id": "L12",
+      "quantity": 1,
+      "raw": "hidden fastener system / fascia screws / screws with plugs",
+      "enriched_query": "Deck Material hidden fastener system / fascia screws / screws with plugs Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "RAIL-2X4-PT",
+      "matched_description": "2x4 Pressure Treated Rail 8ft",
+      "confidence_score": 0.4718,
+      "fuzzy_score": 0.5,
+      "vector_score": 0.453,
+      "runner_up": {
+        "sku": "DECK-2X6-PT",
+        "confidence_score": 0.4591
+      }
+    },
+    {
+      "id": "L13",
+      "quantity": 3,
+      "raw": "beam to post 6x6 connectors",
+      "enriched_query": "Deck Material beam to post 6x6 connectors Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "POST-6X6-PT-12",
+      "matched_description": "6x6 Pressure Treated Post 12ft",
+      "confidence_score": 0.7384,
+      "fuzzy_score": 0.5556,
+      "vector_score": 0.5603,
+      "runner_up": {
+        "sku": "POST-6X6-PT",
+        "confidence_score": 0.7308
+      }
+    },
+    {
+      "id": "L14",
+      "quantity": 2,
+      "raw": "90 degree inside connectors",
+      "enriched_query": "Deck Material 90 degree inside connectors Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "RAIL-2X4-PT",
+      "matched_description": "2x4 Pressure Treated Rail 8ft",
+      "confidence_score": 0.4788,
+      "fuzzy_score": 0.5,
+      "vector_score": 0.4647,
+      "runner_up": {
+        "sku": "DECK-2X6-PT",
+        "confidence_score": 0.4756
+      }
+    },
+    {
+      "id": "L15",
+      "quantity": 11,
+      "raw": "2x10-16 joist hangers",
+      "enriched_query": "Deck Material 2x10-16 joist hangers Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.5125,
+      "fuzzy_score": 0.4468,
+      "vector_score": 0.5563,
+      "runner_up": {
+        "sku": "DECK-2X6-PT",
+        "confidence_score": 0.5107
+      }
+    },
+    {
+      "id": "L16",
+      "quantity": 4,
+      "raw": "stair posts",
+      "enriched_query": "Handrail stair posts Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "RAIL-2X4-PT",
+      "matched_description": "2x4 Pressure Treated Rail 8ft",
+      "confidence_score": 0.4744,
+      "fuzzy_score": 0.5,
+      "vector_score": 0.5241,
+      "runner_up": {
+        "sku": "RAIL-POST-4X4",
+        "confidence_score": 0.4644
+      }
+    },
+    {
+      "id": "L17",
+      "quantity": 6,
+      "raw": "straight posts",
+      "enriched_query": "Handrail straight posts Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "RAIL-2X4-PT",
+      "matched_description": "2x4 Pressure Treated Rail 8ft",
+      "confidence_score": 0.4869,
+      "fuzzy_score": 0.5,
+      "vector_score": 0.5448,
+      "runner_up": {
+        "sku": "RAIL-POST-4X4",
+        "confidence_score": 0.4771
+      }
+    },
+    {
+      "id": "L18",
+      "quantity": 4,
+      "raw": "5' straight rail kits",
+      "enriched_query": "Handrail 5' straight rail kits Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "RAIL-2X4-PT",
+      "matched_description": "2x4 Pressure Treated Rail 8ft",
+      "confidence_score": 0.5086,
+      "fuzzy_score": 0.5,
+      "vector_score": 0.5809,
+      "runner_up": {
+        "sku": "RAIL-POST-4X4",
+        "confidence_score": 0.4735
+      }
+    },
+    {
+      "id": "L19",
+      "quantity": 2,
+      "raw": "8' straight rail kits",
+      "enriched_query": "Handrail 8' straight rail kits Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "RAIL-2X4-PT",
+      "matched_description": "2x4 Pressure Treated Rail 8ft",
+      "confidence_score": 0.5172,
+      "fuzzy_score": 0.5,
+      "vector_score": 0.5953,
+      "runner_up": {
+        "sku": "RAIL-POST-4X4",
+        "confidence_score": 0.4703
+      }
+    },
+    {
+      "id": "L20",
+      "quantity": 2,
+      "raw": "stair rail kits",
+      "enriched_query": "Handrail stair rail kits Green lumber (treated framing), Deckorator Voyager Sedona deck material, Black handrail with wine cap, round spindles rail to house connection kit crossed out — do not order treated exterior pressure treated",
+      "matched_item_code": "RAIL-2X4-PT",
+      "matched_description": "2x4 Pressure Treated Rail 8ft",
+      "confidence_score": 0.4846,
+      "fuzzy_score": 0.5,
+      "vector_score": 0.5409,
+      "runner_up": {
+        "sku": "RAIL-POST-4X4",
+        "confidence_score": 0.4528
+      }
+    }
+  ],
+  "steve_hick_doors": [
+    {
+      "id": "L1",
+      "quantity": 2,
+      "raw": "2-8 LH interior door 7 1/4 jamb 2 panel solid core",
+      "enriched_query": "2-8 LH interior door 7 1/4 jamb 2 panel solid core 2 panel solid core interior doors spf fir spruce pine fir",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.3582,
+      "fuzzy_score": 0.3743,
+      "vector_score": 0.3474,
+      "runner_up": {
+        "sku": "JOIST-2X8-SPF",
+        "confidence_score": 0.2766
+      }
+    },
+    {
+      "id": "L2",
+      "quantity": 2,
+      "raw": "2-8 RH interior door 4 9/16 jamb 2 panel solid core",
+      "enriched_query": "2-8 RH interior door 4 9/16 jamb 2 panel solid core 2 panel solid core interior doors spf fir spruce pine fir",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.3699,
+      "fuzzy_score": 0.3931,
+      "vector_score": 0.3544,
+      "runner_up": {
+        "sku": "JOIST-2X8-SPF",
+        "confidence_score": 0.2864
+      }
+    },
+    {
+      "id": "L3",
+      "quantity": 1,
+      "raw": "2-8 RH interior door 7 1/4 jamb 2 panel solid core",
+      "enriched_query": "2-8 RH interior door 7 1/4 jamb 2 panel solid core 2 panel solid core interior doors spf fir spruce pine fir",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.364,
+      "fuzzy_score": 0.3953,
+      "vector_score": 0.3432,
+      "runner_up": {
+        "sku": "JOIST-2X8-SPF",
+        "confidence_score": 0.288
+      }
+    },
+    {
+      "id": "L4",
+      "quantity": 1,
+      "raw": "2-8 LH interior door 4 9/16 jamb 2 panel solid core",
+      "enriched_query": "2-8 LH interior door 4 9/16 jamb 2 panel solid core 2 panel solid core interior doors spf fir spruce pine fir",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.3632,
+      "fuzzy_score": 0.3721,
+      "vector_score": 0.3572,
+      "runner_up": {
+        "sku": "JOIST-2X8-SPF",
+        "confidence_score": 0.2745
+      }
+    },
+    {
+      "id": "L5",
+      "quantity": 2,
+      "raw": "2-6 bifold door",
+      "enriched_query": "2-6 bifold door 2 panel solid core interior doors spf fir spruce pine fir",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.3607,
+      "fuzzy_score": 0.3949,
+      "vector_score": 0.3378,
+      "runner_up": {
+        "sku": "JOIST-2X10-SPF-20",
+        "confidence_score": 0.3584
+      }
+    },
+    {
+      "id": "L6",
+      "quantity": 1,
+      "raw": "4-0 bifold door",
+      "enriched_query": "4-0 bifold door 2 panel solid core interior doors spf fir spruce pine fir",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.3621,
+      "fuzzy_score": 0.3822,
+      "vector_score": 0.3486,
+      "runner_up": {
+        "sku": "JOIST-2X8-SPF",
+        "confidence_score": 0.3518
+      }
+    },
+    {
+      "id": "L7",
+      "quantity": 2,
+      "raw": "5-0 bifold door",
+      "enriched_query": "5-0 bifold door 2 panel solid core interior doors spf fir spruce pine fir",
+      "matched_item_code": "JOIST-2X10-SPF-20",
+      "matched_description": "2x10 SPF Joist 20ft",
+      "confidence_score": 0.358,
+      "fuzzy_score": 0.5036,
+      "vector_score": 0.4609,
+      "runner_up": {
+        "sku": "BALUSTER-WOOD",
+        "confidence_score": 0.3563
+      }
+    },
+    {
+      "id": "L8",
+      "quantity": 96,
+      "raw": "1x4 pine",
+      "enriched_query": "1x4 pine 2 panel solid core interior doors spf fir spruce pine fir",
+      "matched_item_code": "BOARD-1X4-SPF",
+      "matched_description": "1x4 SPF Board 8ft",
+      "confidence_score": 0.5135,
+      "fuzzy_score": 0.4074,
+      "vector_score": 0.4842,
+      "runner_up": {
+        "sku": "JOIST-2X8-SPF",
+        "confidence_score": 0.3532
+      }
+    },
+    {
+      "id": "L9",
+      "quantity": 15,
+      "raw": "cove moulding",
+      "enriched_query": "cove moulding 2 panel solid core interior doors spf fir spruce pine fir",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.3512,
+      "fuzzy_score": 0.4258,
+      "vector_score": 0.3015,
+      "runner_up": {
+        "sku": "JOIST-2X8-SPF",
+        "confidence_score": 0.3287
+      }
+    },
+    {
+      "id": "L10",
+      "quantity": 32,
+      "raw": "base 4 1/2 MDF flat",
+      "enriched_query": "base 4 1/2 MDF flat 2 panel solid core interior doors spf fir spruce pine fir",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.4407,
+      "fuzzy_score": 0.4224,
+      "vector_score": 0.453,
+      "runner_up": {
+        "sku": "JOIST-2X12-SPF",
+        "confidence_score": 0.3125
+      }
+    },
+    {
+      "id": "L11",
+      "quantity": 40,
+      "raw": "casing 3 1/2 MDF flat",
+      "enriched_query": "casing 3 1/2 MDF flat 2 panel solid core interior doors spf fir spruce pine fir",
+      "matched_item_code": "BALUSTER-WOOD",
+      "matched_description": "Wood Deck Baluster 32in",
+      "confidence_score": 0.3904,
+      "fuzzy_score": 0.4049,
+      "vector_score": 0.3808,
+      "runner_up": {
+        "sku": "JOIST-2X8-SPF",
+        "confidence_score": 0.2535
+      }
+    }
+  ]
+}

@@ -15,6 +15,12 @@ Usage:
     python scripts/match_real_docs.py                       # all fixtures
     python scripts/match_real_docs.py --only espelund_deck  # one fixture
     python scripts/match_real_docs.py --json-out results.json
+
+When huggingface.co is unreachable (locked-down environments), pass
+--onnx-dir pointing at an ONNX export of the same model (e.g. the
+qdrant-fastembed all-MiniLM-L6-v2 archive). The harness then swaps a
+numerically-equivalent ONNX encoder into VectorIndex — same weights, same
+mean pooling + L2 normalization — without touching production code.
 """
 
 from __future__ import annotations
@@ -36,6 +42,61 @@ from app.services.upload_context import enrich_description_for_matching  # noqa:
 DEFAULT_FIXTURES = REPO_ROOT / "tests" / "fixtures" / "real_docs"
 DEFAULT_CATALOG = REPO_ROOT / "example_catalog.csv"
 DEFAULT_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+
+
+class OnnxMiniLMEncoder:
+    """Drop-in stand-in for SentenceTransformer backed by an ONNX export.
+
+    Reproduces the all-MiniLM-L6-v2 sentence pipeline: BERT encoder →
+    attention-masked mean pooling → L2 normalization, max_seq_length 256.
+    Only the encode() surface VectorIndex uses is implemented.
+    """
+
+    onnx_dir: str | None = None  # set before use via install()
+
+    def __init__(self, model_name: str):
+        import numpy as _np
+        import onnxruntime as ort
+        from tokenizers import Tokenizer
+
+        self._np = _np
+        directory = Path(type(self).onnx_dir)
+        self.session = ort.InferenceSession(
+            str(directory / "model.onnx"), providers=["CPUExecutionProvider"]
+        )
+        self.tokenizer = Tokenizer.from_file(str(directory / "tokenizer.json"))
+        self.tokenizer.enable_truncation(max_length=256)
+        self.tokenizer.enable_padding()
+
+    def encode(self, texts, convert_to_numpy=True, normalize_embeddings=True):
+        np = self._np
+        encodings = self.tokenizer.encode_batch(list(texts))
+        input_ids = np.array([e.ids for e in encodings], dtype=np.int64)
+        attention_mask = np.array([e.attention_mask for e in encodings], dtype=np.int64)
+        token_type_ids = np.zeros_like(input_ids)
+        (hidden,) = self.session.run(
+            None,
+            {
+                "input_ids": input_ids,
+                "attention_mask": attention_mask,
+                "token_type_ids": token_type_ids,
+            },
+        )
+        mask = attention_mask[:, :, None].astype(hidden.dtype)
+        summed = (hidden * mask).sum(axis=1)
+        counts = np.clip(mask.sum(axis=1), 1e-9, None)
+        embeddings = summed / counts
+        if normalize_embeddings:
+            norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+            embeddings = embeddings / np.clip(norms, 1e-12, None)
+        return embeddings.astype(np.float32)
+
+    @classmethod
+    def install(cls, onnx_dir: Path) -> None:
+        from app.services import vector_index
+
+        cls.onnx_dir = str(onnx_dir)
+        vector_index.SentenceTransformer = cls
 
 
 def load_catalog(csv_path: Path) -> list[ERPItem]:
@@ -153,7 +214,16 @@ def main() -> int:
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--only", help="run a single fixture by stem name")
     parser.add_argument("--json-out", type=Path, help="write full results as JSON")
+    parser.add_argument(
+        "--onnx-dir",
+        type=Path,
+        help="local ONNX export of the embedding model (offline fallback)",
+    )
     args = parser.parse_args()
+
+    if args.onnx_dir:
+        OnnxMiniLMEncoder.install(args.onnx_dir)
+        print(f"Using ONNX encoder from {args.onnx_dir}")
 
     catalog = load_catalog(args.catalog)
     if not catalog:
