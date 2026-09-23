@@ -200,6 +200,8 @@ All settings are controlled via environment variables (see `.env.example`):
 | `ENABLE_CONTEXT_PIPELINE` | `true` | Enables Stage A/B/C parsing pipeline before matching |
 | `CONTEXT_PIPELINE_FALLBACK_TO_LEGACY` | `true` | Falls back to legacy single-pass extraction when context pipeline fails |
 | `PARSE_DEBUG_SAVE_JSON` | `false` | Saves stage artifacts (`stage_a_raw_extract.json`, `stage_b_contextualized.json`, `stage_c_match_ready.json`) under `data/parse_debug/session_<id>/` |
+| `PARSE_ARCHIVE_UPLOADS` | `false` | Retains source images/PDFs after processing so parses can be re-benchmarked. See `docs/VISION_BENCHMARK.md` |
+| `PARSE_ARCHIVE_DIR` | `data/upload_archive` | Where retained uploads are written when `PARSE_ARCHIVE_UPLOADS` is on |
 
 ---
 
@@ -280,3 +282,23 @@ CSV catalog uploads can include these optional AI-ready columns in addition to `
 ## SKU Refresh Workflow
 
 See `docs/SKU_REFRESH_WORKFLOW.md` for the full admin workflow and generated artifact layout.
+
+
+## On-Device Vision Benchmark
+
+`docs/VISION_BENCHMARK.md` describes a harness for measuring whether an
+on-device extractor (Apple Vision / Android ML Kit) can reproduce the cloud
+Stage A pass — the data needed to decide whether extraction can move onto a
+phone and drop the OpenAI dependency.
+
+```bash
+python scripts/export_vision_benchmark.py --out data/vision_benchmark --require-images
+# ...run the on-device extractor, write vision.json next to each expected.json...
+python scripts/score_vision_benchmark.py --corpus data/vision_benchmark --detail
+```
+
+Scoring separates *reading* the page (text similarity, quantity accuracy) from
+*understanding* it (section header attribution), because the second is what the
+cloud model's visual layout understanding currently provides. Requires
+`PARSE_ARCHIVE_UPLOADS=true` beforehand — uploads are otherwise deleted after
+processing and cannot be re-run.
